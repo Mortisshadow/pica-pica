@@ -118,7 +118,7 @@ jobs:
         run: pnpm tauri build --ci --no-sign --bundles ${{ matrix.bundle }}
 
       - name: Upload preview installer
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact-name }}
           path: ${{ matrix.artifact-path }}
