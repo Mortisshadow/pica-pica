@@ -72,6 +72,19 @@ Open the repository's **Actions** tab, select **Desktop Preview**, choose **Run 
 
 Tagged versions are also published on the repository's [Releases page](https://github.com/Mortisshadow/pica-pica/releases). Preview releases remain unsigned, so Windows may display a SmartScreen warning. Release packages bundle pinned LGPL FFmpeg/ffprobe binaries from a fixed BtbN release, verify their SHA-256 digests before packaging, include provenance and upstream notices, and ship with a `SHA256SUMS.txt` file for the finished installers. The maintainer procedure is documented in [docs/releasing.md](docs/releasing.md).
 
+### Installing on Linux
+
+Download the release asset ending in `.AppImage`. The `x64` (also called `x86_64` or `amd64`) build supports both 64-bit Intel and AMD processors; it is not limited to AMD hardware. It does not support ARM64 devices.
+
+Do not run the Windows `.exe` installer on Linux. Desktop environments can launch it through Wine, which opens the Windows NSIS setup wizard and displays Windows paths such as `C:\\Users\\…`; that installs the Windows build into Wine rather than installing the native Linux application.
+
+Make the AppImage executable, then launch it:
+
+```bash
+chmod +x Pica*.AppImage
+./Pica*.AppImage
+```
+
 ## Library layout and privacy
 
 Pica Pica reads direct subfolders of the selected root as games:
