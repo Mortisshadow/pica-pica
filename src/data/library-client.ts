@@ -13,6 +13,7 @@ import type {
   ProviderSettings,
   ScanResult,
 } from "@/types/library";
+import type { MpvAvailability, MpvSnapshot, MpvViewport } from "@/types/player";
 
 const pause = (duration = 350) => new Promise((resolve) => window.setTimeout(resolve, duration));
 
@@ -69,6 +70,49 @@ export const libraryClient = {
       return demoClipPage(gameId, cursor, limit);
     }
     return invoke<ClipPage>("get_game_clips", { gameId, cursor, limit });
+  },
+
+  async mpvAvailability(): Promise<MpvAvailability> {
+    if (!isTauri()) return { available: false, version: null, diagnostic: "Embedded libmpv is available in the Windows desktop build." };
+    return invoke<MpvAvailability>("get_mpv_availability");
+  },
+
+  async mpvLoad(clipId: string, sessionId: number): Promise<MpvSnapshot> {
+    return invoke<MpvSnapshot>("mpv_load_clip", { clipId, sessionId });
+  },
+
+  async mpvViewport(viewport: MpvViewport): Promise<void> {
+    if (!isTauri()) return;
+    return invoke<void>("mpv_set_viewport", { viewport });
+  },
+
+  async mpvSnapshot(): Promise<MpvSnapshot> {
+    return invoke<MpvSnapshot>("get_mpv_snapshot");
+  },
+
+  async mpvPaused(sessionId: number, paused: boolean): Promise<MpvSnapshot> {
+    return invoke<MpvSnapshot>("mpv_set_paused", { sessionId, paused });
+  },
+
+  async mpvSeek(sessionId: number, seconds: number): Promise<MpvSnapshot> {
+    return invoke<MpvSnapshot>("mpv_seek", { sessionId, seconds });
+  },
+
+  async mpvVolume(sessionId: number, volume: number): Promise<MpvSnapshot> {
+    return invoke<MpvSnapshot>("mpv_set_volume", { sessionId, volume });
+  },
+
+  async mpvMuted(sessionId: number, muted: boolean): Promise<MpvSnapshot> {
+    return invoke<MpvSnapshot>("mpv_set_muted", { sessionId, muted });
+  },
+
+  async mpvAudioTrack(sessionId: number, trackId: number): Promise<MpvSnapshot> {
+    return invoke<MpvSnapshot>("mpv_select_audio_track", { sessionId, trackId });
+  },
+
+  async mpvStop(sessionId: number): Promise<void> {
+    if (!isTauri()) return;
+    return invoke<void>("mpv_stop", { sessionId });
   },
 
   async updateMetadata(update: MetadataUpdate): Promise<LibrarySnapshot> {

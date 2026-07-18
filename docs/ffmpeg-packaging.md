@@ -1,6 +1,6 @@
 # FFmpeg packaging policy
 
-Pica Pica uses `ffprobe` to inspect clips and `ffmpeg` to create thumbnails. It does not need GPL encoders such as libx264 for those tasks.
+Pica Pica uses `ffprobe` to inspect clips and `ffmpeg` to create thumbnails. Playback does not use FFmpeg and does not create compatibility copies.
 
 ## Stable release requirements
 

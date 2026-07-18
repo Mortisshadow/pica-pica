@@ -4,11 +4,31 @@ use crate::models::{CachedClip, Clip, Game};
 use crate::video::FfmpegTools;
 use std::collections::HashMap;
 use std::ffi::OsStr;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::sync::Mutex;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 use walkdir::WalkDir;
 
-const VIDEO_EXTENSIONS: &[&str] = &["mp4", "m4v", "mov", "mkv", "webm", "avi"];
+const VIDEO_EXTENSIONS: &[&str] = &[
+    "mp4", "m4v", "mov", "mkv", "webm", "avi", "wmv", "flv", "mpg", "mpeg", "ts", "mts", "m2ts",
+    "vob", "ogv", "3gp", "3g2", "asf",
+];
+const MAX_MEDIA_WORKERS: usize = 4;
+
+struct ClipWork {
+    path: PathBuf,
+    size_bytes: u64,
+    created_at: i64,
+    cached: Option<CachedClip>,
+}
+
+struct ProcessedClip {
+    clip: Clip,
+    probed: bool,
+    reused: bool,
+    thumbnail_created: bool,
+}
 
 #[derive(Debug)]
 pub struct ScanOutput {
@@ -46,6 +66,77 @@ fn display_path(path: &Path) -> String {
     path.to_string_lossy().into_owned()
 }
 
+fn media_worker_count(items: usize) -> usize {
+    std::thread::available_parallelism()
+        .map(usize::from)
+        .unwrap_or(1)
+        .min(MAX_MEDIA_WORKERS)
+        .min(items.max(1))
+}
+
+fn process_clip(
+    work: &ClipWork,
+    game_id: &str,
+    cache_path: &Path,
+    ffmpeg: &FfmpegTools,
+) -> ProcessedClip {
+    let path = &work.path;
+    let clip_id = stable_id(path);
+    let ext = extension(path).unwrap_or_default();
+    let (video_info, probed, reused) = if let Some(cached) = &work.cached {
+        (
+            crate::video::VideoInfo {
+                duration_seconds: cached.duration_seconds,
+                width: cached.width,
+                height: cached.height,
+                codec: cached.codec.clone(),
+            },
+            false,
+            true,
+        )
+    } else {
+        (ffmpeg.probe(path), true, false)
+    };
+    let thumbnail_path = cache_path.join("thumbnails").join(format!("{clip_id}.jpg"));
+    if work.cached.is_none() {
+        let _ = std::fs::remove_file(&thumbnail_path);
+    }
+    let thumbnail_created = ffmpeg.thumbnail(path, thumbnail_path.clone());
+    let thumbnail = thumbnail_path
+        .exists()
+        .then(|| display_path(&thumbnail_path));
+    let compatible = matches!(ext.as_str(), "mp4" | "m4v" | "mov")
+        && video_info
+            .codec
+            .as_deref()
+            .is_none_or(|codec| codec == "h264");
+
+    ProcessedClip {
+        clip: Clip {
+            id: clip_id,
+            game_id: game_id.to_owned(),
+            path: display_path(path),
+            file_name: path
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .into_owned(),
+            extension: ext,
+            size_bytes: work.size_bytes,
+            created_at: work.created_at,
+            duration_seconds: video_info.duration_seconds,
+            width: video_info.width,
+            height: video_info.height,
+            codec: video_info.codec,
+            compatible,
+            thumbnail_path: thumbnail,
+        },
+        probed,
+        reused,
+        thumbnail_created,
+    }
+}
+
 pub fn scan_root(
     root: &Path,
     cache_path: &Path,
@@ -79,6 +170,7 @@ pub fn scan_root(
         let game_id = stable_id(&folder_path);
         let metadata = provider.lookup(&folder_name);
         let mut clips = Vec::new();
+        let mut work = Vec::new();
 
         for entry in WalkDir::new(&folder_path).follow_links(false) {
             let entry = match entry {
@@ -100,60 +192,43 @@ pub fn scan_root(
                 ));
                 continue;
             };
-            let clip_id = stable_id(path);
-            let ext = extension(path).unwrap_or_default();
             let created_at = timestamp(file_metadata.modified().unwrap_or(UNIX_EPOCH));
-            let cached = cached_clips.get(&clip_id).filter(|clip| {
-                clip.size_bytes == file_metadata.len() && clip.created_at == created_at
-            });
-            let video_info = if let Some(cached) = cached {
-                clips_reused += 1;
-                crate::video::VideoInfo {
-                    duration_seconds: cached.duration_seconds,
-                    width: cached.width,
-                    height: cached.height,
-                    codec: cached.codec.clone(),
-                }
-            } else {
-                clips_probed += 1;
-                ffmpeg.probe(path)
-            };
-            let thumbnail_path = cache_path.join("thumbnails").join(format!("{clip_id}.jpg"));
-            if cached.is_none() && thumbnail_path.exists() {
-                let _ = std::fs::remove_file(&thumbnail_path);
-            }
-            let thumbnail_created = ffmpeg.thumbnail(path, thumbnail_path.clone());
-            if thumbnail_created {
-                thumbnails_created += 1
-            }
-            let thumbnail = thumbnail_path
-                .exists()
-                .then(|| display_path(&thumbnail_path));
-            let compatible = matches!(ext.as_str(), "mp4" | "m4v" | "mov")
-                && video_info
-                    .codec
-                    .as_deref()
-                    .is_none_or(|codec| codec == "h264");
-
-            clips.push(Clip {
-                id: clip_id,
-                game_id: game_id.clone(),
-                path: display_path(path),
-                file_name: path
-                    .file_name()
-                    .unwrap_or_default()
-                    .to_string_lossy()
-                    .into_owned(),
-                extension: ext,
+            let clip_id = stable_id(path);
+            let cached = cached_clips
+                .get(&clip_id)
+                .filter(|clip| {
+                    clip.size_bytes == file_metadata.len() && clip.created_at == created_at
+                })
+                .cloned();
+            work.push(ClipWork {
+                path: path.to_path_buf(),
                 size_bytes: file_metadata.len(),
                 created_at,
-                duration_seconds: video_info.duration_seconds,
-                width: video_info.width,
-                height: video_info.height,
-                codec: video_info.codec,
-                compatible,
-                thumbnail_path: thumbnail,
+                cached,
             });
+        }
+
+        let next = AtomicUsize::new(0);
+        let processed = Mutex::new(Vec::with_capacity(work.len()));
+        std::thread::scope(|scope| {
+            for _ in 0..media_worker_count(work.len()) {
+                scope.spawn(|| {
+                    loop {
+                        let index = next.fetch_add(1, Ordering::Relaxed);
+                        let Some(item) = work.get(index) else {
+                            break;
+                        };
+                        let clip = process_clip(item, &game_id, cache_path, ffmpeg);
+                        processed.lock().expect("media result lock").push(clip);
+                    }
+                });
+            }
+        });
+        for result in processed.into_inner().expect("media result lock") {
+            clips_probed += usize::from(result.probed);
+            clips_reused += usize::from(result.reused);
+            thumbnails_created += usize::from(result.thumbnail_created);
+            clips.push(result.clip);
         }
 
         clips.sort_by_key(|clip| std::cmp::Reverse(clip.created_at));
@@ -200,7 +275,15 @@ mod tests {
     fn recognizes_supported_extensions_case_insensitively() {
         assert!(is_supported_video(Path::new("Replay.MP4")));
         assert!(is_supported_video(Path::new("Replay.mkv")));
+        assert!(is_supported_video(Path::new("Replay.M2TS")));
+        assert!(is_supported_video(Path::new("Replay.wmv")));
         assert!(!is_supported_video(Path::new("notes.txt")));
+    }
+
+    #[test]
+    fn media_workers_are_bounded() {
+        assert_eq!(media_worker_count(0), 1);
+        assert!(media_worker_count(10_000) <= MAX_MEDIA_WORKERS);
     }
 
     #[test]

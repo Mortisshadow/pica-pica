@@ -2,7 +2,7 @@
 
 ## Boundaries
 
-Pica Pica uses the WebView only for presentation. Trusted filesystem traversal, persistence, video probing, and thumbnail generation stay in Rust. The frontend talks to that boundary through a small typed client in `src/data/library-client.ts`.
+Pica Pica keeps trusted filesystem traversal, persistence, video probing, thumbnail generation, and playback control in Rust. The frontend talks to that boundary through a small typed client in `src/data/library-client.ts`.
 
 The browser demo adapter is selected only when the Tauri runtime is absent. It lets contributors build and review the interface without granting filesystem access or sharing private media.
 
@@ -16,16 +16,22 @@ Library bootstrap queries aggregate game summaries only. Clip records stay in SQ
 
 ## Scanning
 
-Only direct children of the chosen root become games. Video lookup may recurse below each game folder. Symbolic links are not followed. Supported first-pass extensions are MP4, M4V, MOV, MKV, WebM, and AVI.
+Only direct children of the chosen root become games. Video lookup may recurse below each game folder. Symbolic links are not followed. The extension allow-list covers common OBS and desktop-capture containers including MP4, MOV, MKV, WebM, AVI, WMV, MPEG transport streams, and related variants.
 
-The scanner compares the stable path ID, file size and modification time with the index before probing. Unchanged clips reuse cached media metadata and thumbnails; changed files invalidate stale thumbnails. New and changed clips are still processed sequentially. A future persistent background queue will add bounded concurrency, retry state and progress events without weakening the database reconciliation.
+The scanner compares the stable path ID, file size and modification time with the index before probing. Unchanged clips reuse cached media metadata and thumbnails; changed files invalidate stale thumbnails. New and changed clips are processed by a bounded worker pool with at most four concurrent FFmpeg/ffprobe jobs, preventing an unbounded process storm on large libraries.
 
 ## Video tools
 
 `FfmpegTools` is the only module that invokes `ffmpeg` or `ffprobe`. It first checks the installed resource directory for bundled tools and then falls back to `PATH` for development. If neither pair is available, scanning remains functional and the UI uses generated artwork fallbacks.
 
-Original video files are never passed as FFmpeg outputs. Thumbnail output always targets the application cache.
-Probe, thumbnail and tool-detection processes have fixed timeouts and are killed and reaped if they stop responding.
+Original video files are never passed as FFmpeg outputs. Thumbnail output always targets the application cache and is finalized through a temporary file.
+Probe, thumbnail, and tool-detection processes have fixed timeouts and are killed and reaped if they stop responding. On Windows, every media subprocess uses `CREATE_NO_WINDOW` so scans do not flash console windows.
+
+## Playback
+
+Windows uses libmpv in-process. Rust creates a child Win32 surface inside the Tauri window, passes its handle to libmpv before initialization, and exposes only clip-ID-based playback commands. React measures the reserved player rectangle in physical pixels and keeps the native surface aligned while scrolling or resizing. Controls remain in the WebView immediately below the native video surface because Win32 child windows cannot be composited underneath HTML overlays reliably.
+
+libmpv reads the original clip directly, so HEVC and multiple audio tracks do not require large cached conversions. Session identifiers reject stale controls after rapidly switching clips, and the native surface is hidden while it is off-screen or a modal is open. Linux currently uses the browser-compatible fallback; a native Linux implementation will require a platform Render API surface rather than the Windows child-window path.
 
 ## Metadata
 

@@ -139,6 +139,7 @@ export function GameDetailPage() {
             selected={selected}
             hasMore={Boolean(nextCursor)}
             loadingMore={clipsLoading}
+            playerActive={!editing}
             onLoadMore={() => void loadMore()}
             onSelect={(clip) => setSelectedId(clip.id)}
           />

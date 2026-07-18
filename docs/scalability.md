@@ -11,7 +11,9 @@ Pica Pica treats 100 clips per game as ordinary use and targets libraries with a
 5. Off-screen clip cards use browser-native `content-visibility` containment to skip unnecessary layout and paint work.
 6. Rescans compare path-derived ID, file size and modification timestamp with cached probe data. Unchanged clips do not start `ffprobe` again.
 7. Changed files invalidate their old thumbnail. FFmpeg and ffprobe are killed after bounded timeouts.
-8. An incomplete directory walk never prunes database rows that were not observed during that failed scan.
+8. New or changed clips use at most four concurrent probe/thumbnail workers; unchanged clips do not start media subprocesses.
+9. Windows playback reads originals through libmpv, avoiding compatibility-copy CPU and storage costs.
+10. An incomplete directory walk never prunes database rows that were not observed during that failed scan.
 
 ## Performance invariants
 
@@ -28,4 +30,4 @@ The Rust test suite creates 10,000 synthetic clip rows and verifies that bootstr
 
 Filesystem notifications should only trigger a debounced incremental reconciliation; they must not replace startup or manual scans because operating-system watchers can lose events on large, networked or unusual filesystems.
 
-Thumbnail generation should move into a persistent bounded background queue with progress events, retry status and a concurrency limit. A future infinite-scroll experience can add row-level TanStack Virtual virtualization while retaining the cursor API; pagination remains necessary so the JavaScript heap never owns the whole catalog.
+Thumbnail generation can later move from the current bounded scan workers into a persistent background queue with progress events and retry status. A future infinite-scroll experience can add row-level TanStack Virtual virtualization while retaining the cursor API; pagination remains necessary so the JavaScript heap never owns the whole catalog.

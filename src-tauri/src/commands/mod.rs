@@ -6,6 +6,7 @@ use crate::models::{
     ApiKeyUpdate, BootstrapState, ClipCursor, ClipPage, CustomArtworkUpdate, LibrarySnapshot,
     MetadataSearchResult, MetadataSelection, MetadataUpdate, ProviderSettings, ScanResult,
 };
+use crate::player::{MpvAvailability, MpvService, MpvSnapshot, MpvViewport};
 use crate::video::FfmpegTools;
 use std::path::{Path, PathBuf};
 use tauri::{Manager, State};
@@ -15,6 +16,7 @@ pub struct AppState {
     pub database: Database,
     pub ffmpeg: FfmpegTools,
     pub online_metadata: OnlineMetadataService,
+    pub mpv: MpvService,
 }
 
 #[tauri::command]
@@ -94,6 +96,107 @@ pub async fn scan_library(state: State<'_, AppState>) -> AppResult<ScanResult> {
     tauri::async_runtime::spawn_blocking(move || execute_scan(&database, &root, &ffmpeg))
         .await
         .map_err(|error| AppError::Task(error.to_string()))?
+}
+
+#[tauri::command]
+pub fn get_mpv_availability(state: State<'_, AppState>) -> MpvAvailability {
+    state.mpv.availability()
+}
+
+#[tauri::command]
+pub async fn mpv_load_clip(
+    clip_id: String,
+    session_id: u64,
+    window: tauri::WebviewWindow,
+    state: State<'_, AppState>,
+) -> AppResult<MpvSnapshot> {
+    validate_clip_id(&clip_id)?;
+    let path = state.database.clip_path(&clip_id)?;
+    if !path.is_file() {
+        return Err(AppError::InvalidInput(
+            "The original clip is no longer available.".to_owned(),
+        ));
+    }
+    let mpv = state.mpv.clone();
+    tauri::async_runtime::spawn_blocking(move || mpv.load(&window, &path, session_id))
+        .await
+        .map_err(|error| AppError::Task(error.to_string()))?
+}
+
+#[tauri::command]
+pub fn mpv_set_viewport(viewport: MpvViewport, state: State<'_, AppState>) -> AppResult<()> {
+    state.mpv.set_viewport(&viewport)
+}
+
+#[tauri::command]
+pub fn get_mpv_snapshot(state: State<'_, AppState>) -> AppResult<MpvSnapshot> {
+    state.mpv.snapshot()
+}
+
+#[tauri::command]
+pub fn mpv_set_paused(
+    session_id: u64,
+    paused: bool,
+    state: State<'_, AppState>,
+) -> AppResult<MpvSnapshot> {
+    state.mpv.set_paused(session_id, paused)
+}
+
+#[tauri::command]
+pub fn mpv_seek(
+    session_id: u64,
+    seconds: f64,
+    state: State<'_, AppState>,
+) -> AppResult<MpvSnapshot> {
+    if !seconds.is_finite() {
+        return Err(AppError::InvalidInput("Invalid seek position.".to_owned()));
+    }
+    state.mpv.seek(session_id, seconds)
+}
+
+#[tauri::command]
+pub fn mpv_set_volume(
+    session_id: u64,
+    volume: f64,
+    state: State<'_, AppState>,
+) -> AppResult<MpvSnapshot> {
+    if !volume.is_finite() {
+        return Err(AppError::InvalidInput("Invalid volume.".to_owned()));
+    }
+    state.mpv.set_volume(session_id, volume)
+}
+
+#[tauri::command]
+pub fn mpv_set_muted(
+    session_id: u64,
+    muted: bool,
+    state: State<'_, AppState>,
+) -> AppResult<MpvSnapshot> {
+    state.mpv.set_muted(session_id, muted)
+}
+
+#[tauri::command]
+pub fn mpv_select_audio_track(
+    session_id: u64,
+    track_id: i64,
+    state: State<'_, AppState>,
+) -> AppResult<MpvSnapshot> {
+    if track_id <= 0 {
+        return Err(AppError::InvalidInput("Invalid audio track.".to_owned()));
+    }
+    state.mpv.select_audio_track(session_id, track_id)
+}
+
+#[tauri::command]
+pub fn mpv_stop(session_id: u64, state: State<'_, AppState>) -> AppResult<()> {
+    state.mpv.stop(session_id)
+}
+
+fn validate_clip_id(clip_id: &str) -> AppResult<()> {
+    if clip_id.len() != 64 || !clip_id.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return Err(AppError::InvalidInput("Invalid clip ID.".to_owned()));
+    }
+    Ok(())
 }
 
 #[tauri::command]
