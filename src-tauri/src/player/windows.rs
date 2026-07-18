@@ -7,12 +7,11 @@ use std::ptr;
 use std::sync::{Arc, Mutex};
 use tauri::WebviewWindow;
 use windows::Win32::Foundation::{HINSTANCE, HWND};
-use windows::Win32::Graphics::Gdi::CreateRoundRectRgn;
+use windows::Win32::Graphics::Gdi::{CreateRoundRectRgn, SetWindowRgn};
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, HWND_TOP, SW_HIDE, SW_SHOW, SWP_NOACTIVATE, SWP_NOOWNERZORDER, SWP_SHOWWINDOW,
-    SetWindowPos, SetWindowRgn, ShowWindow, WINDOW_EX_STYLE, WS_CHILD, WS_CLIPCHILDREN,
-    WS_CLIPSIBLINGS,
+    SetWindowPos, ShowWindow, WINDOW_EX_STYLE, WS_CHILD, WS_CLIPCHILDREN, WS_CLIPSIBLINGS,
 };
 use windows::core::w;
 
@@ -221,7 +220,7 @@ impl Player {
 
     fn get_flag(&self, name: &str) -> Option<bool> {
         let name = CString::new(name).ok()?;
-        let mut value = 0_c_int;
+        let mut value = 0 as c_int;
         let code = unsafe {
             (self.api.get_property)(
                 self.handle,

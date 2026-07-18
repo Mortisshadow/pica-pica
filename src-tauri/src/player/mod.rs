@@ -1,5 +1,7 @@
+#[cfg(not(windows))]
 use crate::errors::{AppError, AppResult};
 use serde::{Deserialize, Serialize};
+#[cfg(not(windows))]
 use std::path::{Path, PathBuf};
 
 #[cfg(windows)]
