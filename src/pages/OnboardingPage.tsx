@@ -11,9 +11,9 @@ import { libraryClient } from "@/data/library-client";
 import { useLibrary } from "@/features/library/LibraryProvider";
 
 const benefits = [
-  { icon: LockKeyhole, title: "Bleibt bei dir", text: "Clips werden weder hochgeladen noch verändert." },
-  { icon: Sparkles, title: "Schön sortiert", text: "Ordner werden zu einer visuellen Spielebibliothek." },
-  { icon: FolderHeart, title: "Offline bereit", text: "Index und Artwork liegen sicher im App-Cache." },
+  { icon: LockKeyhole, title: "Stays with you", text: "Clips are never uploaded or modified." },
+  { icon: Sparkles, title: "Beautifully organized", text: "Folders become a visual game library." },
+  { icon: FolderHeart, title: "Ready offline", text: "Your index and artwork stay safely in the app cache." },
 ];
 
 export function OnboardingPage() {
@@ -44,13 +44,13 @@ export function OnboardingPage() {
         <div className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)] items-center gap-14 py-12 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.86fr)]">
           <motion.section className="min-w-0" initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}>
             <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-primary/15 bg-primary/[.07] px-3 py-1.5 text-xs font-semibold text-primary">
-              <Sparkles className="size-3.5" /> Deine Momente, deine Bibliothek
+              <Sparkles className="size-3.5" /> Your moments, your library
             </div>
             <h1 className="max-w-3xl text-5xl font-black leading-[.94] tracking-[-.065em] sm:text-6xl xl:text-7xl">
-              Replay-Clips verdienen mehr als einen <span className="text-primary">Dateiordner.</span>
+              Replay clips deserve more than a <span className="text-primary">file folder.</span>
             </h1>
             <p className="mt-7 max-w-xl text-base leading-7 text-muted-foreground sm:text-lg">
-              Verwandle deinen OBS-Ordner in eine schnelle, private und wunderschöne Gaming-Bibliothek – ganz ohne Werbung oder Account.
+              Turn your OBS folder into a fast, private, and beautiful gaming library—without ads or an account.
             </p>
             <div className="mt-10 grid gap-4 sm:grid-cols-3 lg:max-w-2xl">
               {benefits.map(({ icon: Icon, title, text }) => (
@@ -71,37 +71,37 @@ export function OnboardingPage() {
           >
             <div className="flex items-start justify-between gap-5">
               <div>
-                <p className="text-xs font-bold uppercase tracking-[.18em] text-primary">Schritt 1 von 1</p>
-                <h2 className="mt-2 text-2xl font-bold tracking-[-.035em]">Wo liegen deine Clips?</h2>
-                <p className="mt-2 text-sm leading-6 text-muted-foreground">Wähle den Ordner, in dem deine Spiele-Unterordner liegen.</p>
+                <p className="text-xs font-bold uppercase tracking-[.18em] text-primary">Step 1 of 1</p>
+                <h2 className="mt-2 text-2xl font-bold tracking-[-.035em]">Where are your clips?</h2>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">Choose the folder that contains your game subfolders.</p>
               </div>
               <div className="grid size-11 shrink-0 place-items-center rounded-2xl bg-white/[.06]">
                 <FolderOpen className="size-5 text-primary" />
               </div>
             </div>
 
-            <Item asChild variant="outline" className="mt-7 flex-nowrap rounded-2xl border-dashed border-white/15 bg-black/20 p-5 hover:border-primary/35 hover:bg-primary/[.035]">
+            <Item asChild variant="outline" className="mt-7 w-full flex-nowrap rounded-2xl border-dashed border-white/15 bg-black/20 p-5 hover:border-primary/35 hover:bg-primary/[.035]">
               <button type="button" onClick={selectFolder}>
                 <ItemMedia variant="icon" className="size-12 self-center! translate-y-0! rounded-xl border-0 bg-primary text-primary-foreground">
                   {selectedPath ? <Check className="size-5" /> : <FolderOpen className="size-5" />}
                 </ItemMedia>
                 <ItemContent className="min-w-0 gap-1">
-                  <ItemTitle className="font-semibold">{selectedPath ? "Ordner ausgewählt" : "Clipordner auswählen"}</ItemTitle>
-                  <ItemDescription className="line-clamp-1 text-xs">{selectedPath ?? "Zum Beispiel D:\\Clips oder /home/name/Videos/Clips"}</ItemDescription>
+                  <ItemTitle className="font-semibold">{selectedPath ? "Folder selected" : "Choose clips folder"}</ItemTitle>
+                  <ItemDescription className="line-clamp-1 text-xs">{selectedPath ?? "For example D:\\Clips or /home/name/Videos/Clips"}</ItemDescription>
                 </ItemContent>
                 <ItemActions><ChevronRight className="size-4 text-muted-foreground" /></ItemActions>
               </button>
             </Item>
 
-            {error ? <Alert variant="destructive" className="mt-4"><AlertTriangle className="mt-0.5 size-4" /><AlertTitle>Ordner konnte nicht gelesen werden</AlertTitle><AlertDescription>{error}</AlertDescription></Alert> : null}
+            {error ? <Alert variant="destructive" className="mt-4"><AlertTriangle className="mt-0.5 size-4" /><AlertTitle>Could not read folder</AlertTitle><AlertDescription>{error}</AlertDescription></Alert> : null}
 
             <Button size="lg" className="mt-5 w-full" disabled={!selectedPath || scanning} onClick={continueSetup}>
               {scanning ? <Spinner /> : null}
-              {scanning ? "Bibliothek wird aufgebaut …" : "Bibliothek erstellen"}
+              {scanning ? "Building library …" : "Create library"}
               {!scanning ? <ChevronRight className="size-4" /> : null}
             </Button>
             <p className="mt-4 text-center text-[11px] leading-5 text-muted-foreground">
-              Pica Pica liest Dateien nur. Originale werden niemals automatisch verschoben, umbenannt oder gelöscht.
+              Pica Pica only reads files. Originals are never moved, renamed, or deleted automatically.
             </p>
           </motion.section>
         </div>

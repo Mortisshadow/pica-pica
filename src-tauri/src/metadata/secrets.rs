@@ -15,7 +15,7 @@ impl ProviderKey {
             "rawg" => Ok(Self::Rawg),
             "steamgriddb" => Ok(Self::SteamGridDb),
             _ => Err(AppError::InvalidInput(
-                "Unbekannter Metadatenanbieter.".to_owned(),
+                "Unknown metadata provider.".to_owned(),
             )),
         }
     }
@@ -49,7 +49,7 @@ impl SecretStore {
         let value = value.trim();
         if value.len() > 512 {
             return Err(AppError::InvalidInput(
-                "Der API-Schlüssel ist ungewöhnlich lang.".to_owned(),
+                "The API key is unusually long.".to_owned(),
             ));
         }
         Self::entry(provider)?

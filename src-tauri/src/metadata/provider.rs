@@ -30,7 +30,7 @@ const CATALOG: &[CatalogEntry] = &[
     CatalogEntry {
         names: &["overwatch 2", "overwatch2"],
         title: "Overwatch 2",
-        description: "Ein teambasierter Hero-Shooter, in dem jede Entscheidung und jede Sekunde den Ausgang des Matches verändern kann.",
+        description: "A team-based hero shooter where every decision and every second can change the outcome of a match.",
         genres: &["Shooter", "Team", "Competitive"],
         year: 2022,
         colors: ("#ef6a35", "#273a67"),
@@ -38,7 +38,7 @@ const CATALOG: &[CatalogEntry] = &[
     CatalogEntry {
         names: &["valorant"],
         title: "VALORANT",
-        description: "Präzises Gunplay trifft auf einzigartige Agentenfähigkeiten in taktischen Fünf-gegen-Fünf-Runden.",
+        description: "Precise gunplay meets unique agent abilities in tactical five-versus-five rounds.",
         genres: &["Tactical", "Shooter"],
         year: 2020,
         colors: ("#ff4655", "#171b2c"),
@@ -46,7 +46,7 @@ const CATALOG: &[CatalogEntry] = &[
     CatalogEntry {
         names: &["counter strike 2", "cs2", "counterstrike 2"],
         title: "Counter-Strike 2",
-        description: "Der kompetitive Taktik-Shooter, in dem Präzision, Teamplay und Nervenstärke zählen.",
+        description: "A competitive tactical shooter where precision, teamwork, and composure matter.",
         genres: &["Tactical", "Shooter"],
         year: 2023,
         colors: ("#d89535", "#182c43"),
@@ -54,7 +54,7 @@ const CATALOG: &[CatalogEntry] = &[
     CatalogEntry {
         names: &["minecraft", "minecraft java edition"],
         title: "Minecraft",
-        description: "Eine Welt aus Blöcken, grenzenlosen Ideen und überraschenden Momenten.",
+        description: "A world of blocks, limitless ideas, and unexpected moments.",
         genres: &["Sandbox", "Adventure"],
         year: 2011,
         colors: ("#55a144", "#273a23"),
@@ -62,7 +62,7 @@ const CATALOG: &[CatalogEntry] = &[
     CatalogEntry {
         names: &["rocket league"],
         title: "Rocket League",
-        description: "Rasantes Autoball-Spiel mit spektakulären Toren, Aerials und knappen Overtime-Momenten.",
+        description: "Fast-paced car football with spectacular goals, aerials, and close overtime moments.",
         genres: &["Sports", "Competitive"],
         year: 2015,
         colors: ("#1488f4", "#f07820"),
@@ -70,7 +70,7 @@ const CATALOG: &[CatalogEntry] = &[
     CatalogEntry {
         names: &["fortnite"],
         title: "Fortnite",
-        description: "Battle Royale, kreative Welten und ständig neue Erlebnisse in einem lebendigen Universum.",
+        description: "Battle royale, creative worlds, and constantly evolving experiences in a vibrant universe.",
         genres: &["Battle Royale", "Action"],
         year: 2017,
         colors: ("#7457d8", "#2b98d2"),
@@ -78,7 +78,7 @@ const CATALOG: &[CatalogEntry] = &[
     CatalogEntry {
         names: &["apex legends", "apex"],
         title: "Apex Legends",
-        description: "Ein schneller Squad-basierter Battle-Royale-Shooter mit einzigartigen Legenden.",
+        description: "A fast squad-based battle royale shooter with unique legends.",
         genres: &["Battle Royale", "Shooter"],
         year: 2019,
         colors: ("#d94c3b", "#29221f"),
@@ -86,7 +86,7 @@ const CATALOG: &[CatalogEntry] = &[
     CatalogEntry {
         names: &["league of legends", "lol"],
         title: "League of Legends",
-        description: "Strategische Fünf-gegen-Fünf-Matches mit Champions, Teamplay und entscheidenden Plays.",
+        description: "Strategic five-versus-five matches with champions, teamwork, and decisive plays.",
         genres: &["MOBA", "Strategy"],
         year: 2009,
         colors: ("#0d91a6", "#17233e"),

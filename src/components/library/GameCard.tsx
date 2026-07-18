@@ -34,7 +34,7 @@ export function GameCard({ game, index }: { game: Game; index: number }) {
           </div>
           {game.metadataStatus === "unresolved" ? (
             <Badge className="absolute left-3 top-3 border-amber-300/25 bg-amber-500/15 text-amber-100">
-              <AlertTriangle className="mr-1.5 size-3" /> Zuordnung fehlt
+              <AlertTriangle className="mr-1.5 size-3" /> Match required
             </Badge>
           ) : null}
         </div>
@@ -43,7 +43,7 @@ export function GameCard({ game, index }: { game: Game; index: number }) {
           <p className="mt-1 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
             <span>{pluralizeClips(game.clipCount)}</span>
             <span aria-hidden="true">·</span>
-            <span className="truncate">Zuletzt {formatDate(game.newestClipAt)}</span>
+            <span className="truncate">Latest {formatDate(game.newestClipAt)}</span>
           </p>
         </div>
       </Link>

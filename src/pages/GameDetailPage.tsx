@@ -72,10 +72,10 @@ export function GameDetailPage() {
         <Empty className="max-w-lg flex-none">
           <EmptyHeader>
             <EmptyMedia variant="icon"><Film className="size-5" /></EmptyMedia>
-            <EmptyTitle>Spiel nicht gefunden</EmptyTitle>
-            <EmptyDescription>Der Eintrag ist nicht mehr Teil deiner aktuellen Bibliothek.</EmptyDescription>
+            <EmptyTitle>Game not found</EmptyTitle>
+            <EmptyDescription>This entry is no longer part of your current library.</EmptyDescription>
           </EmptyHeader>
-          <EmptyContent><Button asChild variant="secondary"><Link to="/library">Zur Bibliothek</Link></Button></EmptyContent>
+          <EmptyContent><Button asChild variant="secondary"><Link to="/library">Back to library</Link></Button></EmptyContent>
         </Empty>
       </div>
     );
@@ -93,27 +93,27 @@ export function GameDetailPage() {
         <div className="noise" />
         <motion.div style={{ y: contentY }} className="relative mx-auto w-full max-w-[1640px] px-5 pb-20 pt-32 sm:px-8 lg:px-10 lg:pb-24">
           <Button asChild variant="secondary" size="sm" className="mb-10 bg-black/25 backdrop-blur-md">
-            <Link to="/library"><ArrowLeft className="size-4" /> Bibliothek</Link>
+            <Link to="/library"><ArrowLeft className="size-4" /> Library</Link>
           </Button>
           <motion.div initial={{ opacity: 0, y: 25 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }} className="max-w-3xl">
             <div className="flex flex-wrap items-center gap-2">
               {game.metadataStatus === "unresolved" ? (
-                <Badge className="border-amber-300/25 bg-amber-400/10 text-amber-100"><AlertTriangle className="mr-1.5 size-3" /> Nicht zugeordnet</Badge>
+                <Badge className="border-amber-300/25 bg-amber-400/10 text-amber-100"><AlertTriangle className="mr-1.5 size-3" /> Not matched</Badge>
               ) : (
-                <Badge className="border-primary/20 bg-primary/10 text-primary"><CheckCircle2 className="mr-1.5 size-3" /> Lokal gespeichert</Badge>
+                <Badge className="border-primary/20 bg-primary/10 text-primary"><CheckCircle2 className="mr-1.5 size-3" /> Saved locally</Badge>
               )}
               {game.releaseYear ? <Badge><Calendar className="mr-1.5 size-3" /> {game.releaseYear}</Badge> : null}
             </div>
             <h1 className="mt-5 text-5xl font-black uppercase leading-[.9] tracking-[-.07em] sm:text-7xl lg:text-8xl">{game.title}</h1>
             <div className="mt-6 flex flex-wrap gap-2">{game.genres.map((genre) => <Badge key={genre}>{genre}</Badge>)}</div>
             <p className="mt-6 max-w-2xl text-sm leading-7 text-white/65 sm:text-base">
-              {game.description ?? `Der Ordner „${game.folderName}“ ist bereit. Ergänze die Spielinformationen, damit deine Bibliothek vollständig wird.`}
+              {game.description ?? `The “${game.folderName}” folder is ready. Add game details to complete your library.`}
             </p>
             <div className="mt-8 flex flex-wrap items-center gap-3">
               <Button onClick={() => document.getElementById("clips")?.scrollIntoView({ behavior: "smooth" })}>
-                <Film className="size-4" /> {pluralizeClips(game.clipCount)} ansehen
+                <Film className="size-4" /> View {pluralizeClips(game.clipCount)}
               </Button>
-              <Button variant="secondary" onClick={() => setEditing(true)}><Edit3 className="size-4" /> Metadaten bearbeiten</Button>
+              <Button variant="secondary" onClick={() => setEditing(true)}><Edit3 className="size-4" /> Edit metadata</Button>
             </div>
           </motion.div>
         </motion.div>
@@ -122,12 +122,12 @@ export function GameDetailPage() {
       <section id="clips" className="relative z-10 mx-auto max-w-[1640px] px-5 pb-24 pt-8 sm:px-8 lg:px-10 lg:pt-12">
         <div className="mb-7">
           <p className="text-xs font-bold uppercase tracking-[.18em] text-primary">Replay Buffer</p>
-          <h2 className="mt-2 text-3xl font-black tracking-[-.045em]">Deine letzten Momente</h2>
+          <h2 className="mt-2 text-3xl font-black tracking-[-.045em]">Your latest moments</h2>
         </div>
         {clipError ? (
           <Alert variant="warning" className="mb-6">
             <AlertTriangle className="mt-0.5 size-4" />
-            <AlertTitle>Clips konnten nicht geladen werden</AlertTitle>
+            <AlertTitle>Could not load clips</AlertTitle>
             <AlertDescription>{clipError}</AlertDescription>
           </Alert>
         ) : null}
@@ -144,14 +144,14 @@ export function GameDetailPage() {
           />
         ) : clipsLoading ? (
           <div className="grid min-h-72 place-items-center rounded-3xl border border-white/10 bg-white/[.02]">
-            <div className="flex items-center gap-3 text-sm text-muted-foreground"><Spinner /> Clips werden geladen …</div>
+            <div className="flex items-center gap-3 text-sm text-muted-foreground"><Spinner /> Loading clips …</div>
           </div>
         ) : (
           <Empty className="min-h-72 rounded-3xl border border-white/10 bg-white/[.02]">
             <EmptyHeader>
               <EmptyMedia variant="icon"><Film className="size-5" /></EmptyMedia>
-              <EmptyTitle>Noch keine Clips in diesem Ordner</EmptyTitle>
-              <EmptyDescription>Neue OBS-Replays erscheinen nach dem nächsten Scan automatisch hier.</EmptyDescription>
+              <EmptyTitle>No clips in this folder yet</EmptyTitle>
+              <EmptyDescription>New OBS replays will appear here automatically after the next scan.</EmptyDescription>
             </EmptyHeader>
           </Empty>
         )}

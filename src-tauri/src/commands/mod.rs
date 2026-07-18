@@ -55,7 +55,7 @@ pub async fn get_game_clips(
 ) -> AppResult<ClipPage> {
     if game_id.len() > 128 || !(1..=100).contains(&limit) {
         return Err(AppError::InvalidInput(
-            "Ungültige Clip-Seitenanfrage.".to_owned(),
+            "Invalid clip page request.".to_owned(),
         ));
     }
     let database = state.database.clone();
@@ -161,9 +161,7 @@ pub async fn set_custom_artwork(
     let ffmpeg_source = state.ffmpeg.source.clone();
     tauri::async_runtime::spawn_blocking(move || {
         if !matches!(update.kind.as_str(), "poster" | "hero") {
-            return Err(AppError::InvalidInput(
-                "Unbekannter Artwork-Typ.".to_owned(),
-            ));
+            return Err(AppError::InvalidInput("Unknown artwork type.".to_owned()));
         }
         if update.game_id.len() > 128
             || !update
@@ -171,21 +169,21 @@ pub async fn set_custom_artwork(
                 .chars()
                 .all(|character| character.is_ascii_alphanumeric() || character == '-')
         {
-            return Err(AppError::InvalidInput("Ungültige Spiel-ID.".to_owned()));
+            return Err(AppError::InvalidInput("Invalid game ID.".to_owned()));
         }
         let source = PathBuf::from(&update.source_path);
-        let source = source.canonicalize().map_err(|_| {
-            AppError::InvalidInput("Die Bilddatei wurde nicht gefunden.".to_owned())
-        })?;
+        let source = source
+            .canonicalize()
+            .map_err(|_| AppError::InvalidInput("The image file was not found.".to_owned()))?;
         if !source.is_file() {
             return Err(AppError::InvalidInput(
-                "Das ausgewählte Artwork ist keine Datei.".to_owned(),
+                "The selected artwork is not a file.".to_owned(),
             ));
         }
         let size = source.metadata()?.len();
         if size > 25 * 1024 * 1024 {
             return Err(AppError::InvalidInput(
-                "Das Artwork darf höchstens 25 MB groß sein.".to_owned(),
+                "Artwork must not exceed 25 MB.".to_owned(),
             ));
         }
         let bytes = std::fs::read(&source)?;
@@ -225,6 +223,6 @@ fn safe_image_extension(path: &Path, bytes: &[u8]) -> AppResult<&'static str> {
         _ => None,
     };
     extension.ok_or_else(|| {
-        AppError::InvalidInput("Unterstützt werden gültige JPG-, PNG- und WebP-Dateien.".to_owned())
+        AppError::InvalidInput("Valid JPG, PNG, and WebP files are supported.".to_owned())
     })
 }

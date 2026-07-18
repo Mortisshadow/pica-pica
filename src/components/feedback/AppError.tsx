@@ -8,12 +8,12 @@ export function AppError({ message }: { message: string }) {
       <Empty className="max-w-lg flex-none rounded-3xl border border-red-400/15 bg-red-400/[.055]">
         <EmptyHeader>
           <EmptyMedia variant="icon" className="bg-red-400/10 text-red-300"><AlertTriangle className="size-5" /></EmptyMedia>
-          <EmptyTitle>Pica Pica konnte nicht starten</EmptyTitle>
+          <EmptyTitle>Pica Pica could not start</EmptyTitle>
           <EmptyDescription>{message}</EmptyDescription>
         </EmptyHeader>
         <EmptyContent>
           <Button variant="secondary" onClick={() => window.location.reload()}>
-          <RotateCcw className="size-4" /> Erneut versuchen
+          <RotateCcw className="size-4" /> Try again
           </Button>
         </EmptyContent>
       </Empty>

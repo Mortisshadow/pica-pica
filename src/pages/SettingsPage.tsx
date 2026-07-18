@@ -1,4 +1,4 @@
-import { CheckCircle2, Database, FolderOpen, HardDrive, KeyRound, ShieldCheck, Video } from "lucide-react";
+import { CheckCircle2, Database, ExternalLink, FolderOpen, HardDrive, KeyRound, ShieldCheck, Video } from "lucide-react";
 import { Fragment, useEffect, useState, type FormEvent } from "react";
 import { PageContainer, PageHeading } from "@/components/layout/PageContainer";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -39,7 +39,7 @@ export function SettingsPage() {
       setProviderSettings(await libraryClient.saveProviderKey(provider, value));
       if (provider === "rawg") setRawgKey("");
       else setSteamGridKey("");
-      setNotice(`${provider === "rawg" ? "RAWG" : "SteamGridDB"}-Schlüssel wurde im Betriebssystem-Schlüsselspeicher gesichert.`);
+      setNotice(`${provider === "rawg" ? "RAWG" : "SteamGridDB"} key was saved in your operating system's secure credential store.`);
     } catch (cause) {
       setError(String(cause));
     } finally {
@@ -47,27 +47,36 @@ export function SettingsPage() {
     }
   }
 
+  async function openProviderPage(url: string) {
+    setError(null);
+    try {
+      await libraryClient.openExternal(url);
+    } catch (cause) {
+      setError(`Could not open the provider page. ${String(cause)}`);
+    }
+  }
+
   const ffmpegLabel = !library?.ffmpegAvailable
-    ? "Nicht gefunden – Thumbnails werden übersprungen"
+    ? "Not found — thumbnails will be skipped"
     : library.ffmpegSource === "bundled"
-      ? "Mit Pica Pica gebündelt"
-      : "Systeminstallation erkannt";
+      ? "Bundled with Pica Pica"
+      : "System installation detected";
   const rows = [
-    { icon: FolderOpen, label: "Bibliotheksordner", value: library?.rootPath ?? "Nicht eingerichtet" },
-    { icon: Database, label: "Lokaler Cache", value: library?.cachePath ?? "–" },
+    { icon: FolderOpen, label: "Library folder", value: library?.rootPath ?? "Not configured" },
+    { icon: Database, label: "Local cache", value: library?.cachePath ?? "—" },
     { icon: Video, label: "FFmpeg", value: ffmpegLabel },
-    { icon: HardDrive, label: "Speichermodus", value: "Lokale App-Daten; Originalclips bleiben unangetastet" },
+    { icon: HardDrive, label: "Storage mode", value: "Local app data; original clips remain untouched" },
   ];
 
   return (
     <PageContainer className="max-w-5xl py-12 lg:py-16">
-      <PageHeading eyebrow="Pica Pica" title="Einstellungen" description="Lokale Bibliothek, sichere API-Schlüssel und Video-Werkzeuge." />
+      <PageHeading eyebrow="Pica Pica" title="Settings" description="Local library, secure API keys, and video tools." />
 
       <div className="mt-9 grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
         <Card className="bg-card/65">
           <CardHeader>
-            <CardTitle>Lokales System</CardTitle>
-            <CardDescription>Pfade und Werkzeuge, die Pica Pica auf diesem Gerät verwendet.</CardDescription>
+            <CardTitle>Local system</CardTitle>
+            <CardDescription>Paths and tools Pica Pica uses on this device.</CardDescription>
           </CardHeader>
           <CardContent>
             <ItemGroup className="-mx-4">
@@ -93,7 +102,7 @@ export function SettingsPage() {
           <CardHeader>
             <div className="flex items-center gap-3">
               <div className="grid size-10 place-items-center rounded-xl bg-muted"><KeyRound className="size-4" /></div>
-              <div><CardTitle>Online-Metadaten</CardTitle><CardDescription>Optional und nur bei einer manuellen Suche aktiv.</CardDescription></div>
+              <div><CardTitle>Online metadata</CardTitle><CardDescription>Optional and only used for manual searches.</CardDescription></div>
             </div>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -104,7 +113,8 @@ export function SettingsPage() {
               onChange={setRawgKey}
               saving={saving === "rawg"}
               onSubmit={(event) => void saveKey(event, "rawg")}
-              helpUrl="https://rawg.io/apidocs"
+              onOpenHelp={() => void openProviderPage("https://rawg.io/login?forward=developer")}
+              helpUrl="https://rawg.io/login?forward=developer"
             />
             <Separator />
             <ProviderKeyForm
@@ -114,48 +124,54 @@ export function SettingsPage() {
               onChange={setSteamGridKey}
               saving={saving === "steamgriddb"}
               onSubmit={(event) => void saveKey(event, "steamgriddb")}
+              onOpenHelp={() => void openProviderPage("https://www.steamgriddb.com/profile/preferences/api")}
               helpUrl="https://www.steamgriddb.com/profile/preferences/api"
             />
             <Alert>
               <ShieldCheck className="mt-0.5 size-4" />
-              <AlertTitle>Keine Schlüssel in SQLite oder Git</AlertTitle>
-              <AlertDescription>Windows Credential Manager, macOS Keychain beziehungsweise Linux Secret Service übernehmen die Speicherung.</AlertDescription>
+              <AlertTitle>No keys in SQLite or Git</AlertTitle>
+              <AlertDescription>Keys are stored by Windows Credential Manager, macOS Keychain, or Linux Secret Service.</AlertDescription>
             </Alert>
           </CardContent>
         </Card>
       </div>
 
-      {notice ? <Alert className="mt-6"><CheckCircle2 className="mt-0.5 size-4" /><AlertTitle>Gespeichert</AlertTitle><AlertDescription>{notice}</AlertDescription></Alert> : null}
-      {error ? <Alert variant="destructive" className="mt-6"><KeyRound className="mt-0.5 size-4" /><AlertTitle>Änderung fehlgeschlagen</AlertTitle><AlertDescription>{error}</AlertDescription></Alert> : null}
+      {notice ? <Alert className="mt-6"><CheckCircle2 className="mt-0.5 size-4" /><AlertTitle>Saved</AlertTitle><AlertDescription>{notice}</AlertDescription></Alert> : null}
+      {error ? <Alert variant="destructive" className="mt-6"><KeyRound className="mt-0.5 size-4" /><AlertTitle>Action failed</AlertTitle><AlertDescription>{error}</AlertDescription></Alert> : null}
     </PageContainer>
   );
 }
 
-function ProviderKeyForm({ provider, configured, value, onChange, saving, onSubmit, helpUrl }: {
+function ProviderKeyForm({ provider, configured, value, onChange, saving, onSubmit, onOpenHelp, helpUrl }: {
   provider: string;
   configured: boolean;
   value: string;
   onChange: (value: string) => void;
   saving: boolean;
   onSubmit: (event: FormEvent) => void;
+  onOpenHelp: () => void;
   helpUrl: string;
 }) {
   return (
     <form onSubmit={onSubmit}>
       <Field className="gap-3">
         <div className="flex items-center justify-between gap-3">
-          <FieldLabel htmlFor={`${provider}-key`}>{provider} API-Key</FieldLabel>
+          <FieldLabel htmlFor={`${provider}-key`}>{provider} API key</FieldLabel>
           <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-            {configured ? <><CheckCircle2 className="size-3 text-white" /> Konfiguriert</> : "Nicht konfiguriert"}
+            {configured ? <><CheckCircle2 className="size-3 text-white" /> Configured</> : "Not configured"}
           </span>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row">
-          <Input id={`${provider}-key`} type="password" autoComplete="off" value={value} onChange={(event) => onChange(event.target.value)} placeholder={configured ? "Neuen Schlüssel hinterlegen" : "API-Schlüssel einfügen"} />
+          <Input id={`${provider}-key`} type="password" autoComplete="off" value={value} onChange={(event) => onChange(event.target.value)} placeholder={configured ? "Replace existing key" : "Paste API key"} />
           <Button type="submit" variant="secondary" disabled={!value.trim() || saving}>
-            {saving ? <Spinner /> : <KeyRound className="size-4" />} Speichern
+            {saving ? <Spinner /> : <KeyRound className="size-4" />} Save
           </Button>
         </div>
-        <div><Button type="button" variant="ghost" size="sm" className="-ml-3 text-muted-foreground" onClick={() => void libraryClient.openExternal(helpUrl)}>Schlüssel beim Anbieter erstellen</Button></div>
+        <div>
+          <Button type="button" variant="ghost" size="sm" className="-ml-3 text-muted-foreground" onClick={onOpenHelp} aria-label={`Open ${provider} API key page`} title={helpUrl}>
+            Get an API key from {provider} <ExternalLink className="size-3.5" />
+          </Button>
+        </div>
       </Field>
     </form>
   );
