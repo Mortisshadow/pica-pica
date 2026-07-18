@@ -20,7 +20,7 @@ Pica Pica turns local OBS Replay Buffer clips into a fast, private game library.
 
 ## Project status
 
-The local vertical slice is implemented: onboarding → folder scan → game gallery → game detail → clip player. It now includes opt-in RAWG search, SteamGridDB artwork, secure OS-keychain storage, custom artwork, sidecar-first FFmpeg lookup, incremental probing and cursor-paginated clip pages. Release-owned FFmpeg binaries, automatic file watching, multiple libraries, and signed downloadable installers remain follow-up work.
+The local vertical slice is implemented: onboarding → folder scan → game gallery → game detail → clip player. It now includes opt-in RAWG search, SteamGridDB artwork, secure OS-keychain storage, custom artwork, bundled checksum-verified FFmpeg tools, incremental probing and cursor-paginated clip pages. Automatic file watching, multiple libraries, code signing and stable installers remain follow-up work.
 
 ## Requirements
 
@@ -70,7 +70,7 @@ The manual `Desktop Preview` GitHub Actions workflow builds two unsigned test pa
 
 Open the repository's **Actions** tab, select **Desktop Preview**, choose **Run workflow**, and download the resulting artifact after both jobs finish. Preview artifacts are retained for seven days.
 
-These packages are intentionally not published as GitHub Releases yet. They are unsigned, so Windows may display a SmartScreen warning. The workflow bundles pinned LGPL FFmpeg/ffprobe binaries from a fixed BtbN release, verifies their SHA-256 digests before packaging, and includes provenance and upstream notices. A public stable-release workflow will be added only after code signing is configured.
+Tagged versions are also published on the repository's [Releases page](https://github.com/Mortisshadow/pica-pica/releases). Preview releases remain unsigned, so Windows may display a SmartScreen warning. Release packages bundle pinned LGPL FFmpeg/ffprobe binaries from a fixed BtbN release, verify their SHA-256 digests before packaging, include provenance and upstream notices, and ship with a `SHA256SUMS.txt` file for the finished installers. The maintainer procedure is documented in [docs/releasing.md](docs/releasing.md).
 
 ## Library layout and privacy
 
