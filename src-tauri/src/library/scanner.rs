@@ -85,9 +85,7 @@ pub fn scan_root(
                 Ok(entry) => entry,
                 Err(error) => {
                     complete = false;
-                    warnings.push(format!(
-                        "Ordner konnte nicht vollständig gelesen werden: {error}"
-                    ));
+                    warnings.push(format!("Folder could not be read completely: {error}"));
                     continue;
                 }
             };
@@ -97,7 +95,7 @@ pub fn scan_root(
             }
             let Ok(file_metadata) = entry.metadata() else {
                 warnings.push(format!(
-                    "Dateiinformationen konnten nicht gelesen werden: {}",
+                    "File information could not be read: {}",
                     display_path(path)
                 ));
                 continue;

@@ -3,21 +3,21 @@ use std::path::PathBuf;
 
 #[derive(Debug, thiserror::Error)]
 pub enum AppError {
-    #[error("Der Bibliotheksordner ist nicht eingerichtet.")]
+    #[error("The library folder is not configured.")]
     NotConfigured,
-    #[error("Der ausgewählte Pfad ist kein lesbarer Ordner: {0}")]
+    #[error("The selected path is not a readable folder: {0}")]
     InvalidRoot(PathBuf),
-    #[error("Dateisystemfehler: {0}")]
+    #[error("File system error: {0}")]
     Io(#[from] std::io::Error),
-    #[error("Datenbankfehler: {0}")]
+    #[error("Database error: {0}")]
     Database(#[from] rusqlite::Error),
-    #[error("Hintergrundaufgabe fehlgeschlagen: {0}")]
+    #[error("Background task failed: {0}")]
     Task(String),
-    #[error("Ungültige Eingabe: {0}")]
+    #[error("Invalid input: {0}")]
     InvalidInput(String),
-    #[error("Onlinedienst fehlgeschlagen: {0}")]
+    #[error("Online service failed: {0}")]
     Network(String),
-    #[error("Sicherer Schlüsselspeicher fehlgeschlagen: {0}")]
+    #[error("Secure credential store failed: {0}")]
     SecretStore(String),
 }
 

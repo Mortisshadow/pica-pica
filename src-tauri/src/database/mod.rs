@@ -267,7 +267,7 @@ impl Database {
     pub fn update_metadata(&self, update: &MetadataUpdate) -> AppResult<()> {
         if update.title.trim().is_empty() {
             return Err(AppError::InvalidInput(
-                "Der Spieltitel darf nicht leer sein.".to_owned(),
+                "The game title cannot be empty.".to_owned(),
             ));
         }
         let genres = serde_json::to_string(&update.genres).unwrap_or_else(|_| "[]".to_owned());
@@ -277,9 +277,7 @@ impl Database {
             params![update.title.trim(), update.description, genres, update.release_year, update.game_id],
         )?;
         if changed == 0 {
-            return Err(AppError::InvalidInput(
-                "Das Spiel wurde nicht gefunden.".to_owned(),
-            ));
+            return Err(AppError::InvalidInput("The game was not found.".to_owned()));
         }
         Ok(())
     }
@@ -323,9 +321,7 @@ impl Database {
             ],
         )?;
         if changed == 0 {
-            return Err(AppError::InvalidInput(
-                "Das Spiel wurde nicht gefunden.".to_owned(),
-            ));
+            return Err(AppError::InvalidInput("The game was not found.".to_owned()));
         }
         Ok(())
     }
@@ -335,9 +331,7 @@ impl Database {
             "poster" => "poster_path",
             "hero" => "hero_path",
             _ => {
-                return Err(AppError::InvalidInput(
-                    "Unbekannter Artwork-Typ.".to_owned(),
-                ));
+                return Err(AppError::InvalidInput("Unknown artwork type.".to_owned()));
             }
         };
         let connection = self.connection()?;
@@ -346,9 +340,7 @@ impl Database {
         );
         let changed = connection.execute(&sql, params![path.to_string_lossy(), game_id])?;
         if changed == 0 {
-            return Err(AppError::InvalidInput(
-                "Das Spiel wurde nicht gefunden.".to_owned(),
-            ));
+            return Err(AppError::InvalidInput("The game was not found.".to_owned()));
         }
         Ok(())
     }

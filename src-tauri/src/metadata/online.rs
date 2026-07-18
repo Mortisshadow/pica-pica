@@ -113,7 +113,7 @@ impl OnlineMetadataService {
         let query = query.trim();
         if query.len() < 2 || query.len() > 120 {
             return Err(AppError::InvalidInput(
-                "Die Suche muss zwischen 2 und 120 Zeichen lang sein.".to_owned(),
+                "The search query must be between 2 and 120 characters long.".to_owned(),
             ));
         }
         let key = self.require_key(ProviderKey::Rawg, "RAWG")?;
@@ -152,7 +152,7 @@ impl OnlineMetadataService {
     pub fn resolve_rawg(&self, game_id: &str, rawg_id: &str) -> AppResult<ProviderMetadataUpdate> {
         let numeric_id = rawg_id
             .parse::<u64>()
-            .map_err(|_| AppError::InvalidInput("Ungültige RAWG-ID.".to_owned()))?;
+            .map_err(|_| AppError::InvalidInput("Invalid RAWG ID.".to_owned()))?;
         let key = self.require_key(ProviderKey::Rawg, "RAWG")?;
         let details = self
             .client
@@ -205,7 +205,7 @@ impl OnlineMetadataService {
         let mut url = Url::parse("https://www.steamgriddb.com/api/v2/search/autocomplete/")
             .map_err(network_error)?;
         url.path_segments_mut()
-            .map_err(|_| AppError::Network("SteamGridDB-URL ist ungültig.".to_owned()))?
+            .map_err(|_| AppError::Network("The SteamGridDB URL is invalid.".to_owned()))?
             .push(title);
         let response = self
             .steam_grid_get(url, &key)?
@@ -266,9 +266,7 @@ impl OnlineMetadataService {
 
     fn require_key(&self, provider: ProviderKey, label: &str) -> AppResult<String> {
         self.secrets.read(provider).ok_or_else(|| {
-            AppError::InvalidInput(format!(
-                "Bitte zuerst einen {label}-API-Schlüssel in den Einstellungen hinterlegen."
-            ))
+            AppError::InvalidInput(format!("Add a {label} API key in Settings first."))
         })
     }
 
@@ -276,7 +274,7 @@ impl OnlineMetadataService {
         let url = Url::parse(raw_url).map_err(network_error)?;
         if url.scheme() != "https" || !allowed_artwork_host(url.host_str().unwrap_or_default()) {
             return Err(AppError::Network(
-                "Artwork-Quelle wurde aus Sicherheitsgründen abgelehnt.".to_owned(),
+                "The artwork source was rejected for security reasons.".to_owned(),
             ));
         }
         let response = self
@@ -299,7 +297,7 @@ impl OnlineMetadataService {
             "image/webp" => "webp",
             _ => {
                 return Err(AppError::Network(
-                    "Artwork hat ein nicht unterstütztes Dateiformat.".to_owned(),
+                    "The artwork uses an unsupported file format.".to_owned(),
                 ));
             }
         };
@@ -307,11 +305,11 @@ impl OnlineMetadataService {
             .content_length()
             .is_some_and(|length| length > MAX_ARTWORK_BYTES as u64)
         {
-            return Err(AppError::Network("Artwork ist zu groß.".to_owned()));
+            return Err(AppError::Network("The artwork is too large.".to_owned()));
         }
         let bytes = response.bytes().map_err(network_error)?;
         if bytes.len() > MAX_ARTWORK_BYTES {
-            return Err(AppError::Network("Artwork ist zu groß.".to_owned()));
+            return Err(AppError::Network("The artwork is too large.".to_owned()));
         }
         let hash = blake3::hash(url.as_str().as_bytes()).to_hex();
         let path = self

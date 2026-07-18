@@ -94,34 +94,34 @@ export function MetadataEditor({ game, onClose }: { game: Game; onClose: () => v
         <DialogHeader className="flex-row items-start gap-4 text-left">
           <div className="grid size-11 shrink-0 place-items-center rounded-xl bg-muted"><Sparkles className="size-5" /></div>
           <div className="min-w-0 flex-1">
-            <DialogTitle id="metadata-title">Spiel und Artwork zuordnen</DialogTitle>
-            <DialogDescription id="metadata-description" className="mt-1">Ordner „{game.folderName}“. Online-Treffer werden bestätigt und anschließend vollständig lokal gecacht.</DialogDescription>
+            <DialogTitle id="metadata-title">Match game and artwork</DialogTitle>
+            <DialogDescription id="metadata-description" className="mt-1">Folder “{game.folderName}”. Online results are confirmed before being cached locally in full.</DialogDescription>
           </div>
-          <DialogClose asChild><Button type="button" variant="ghost" size="icon" aria-label="Schließen"><X className="size-4" /></Button></DialogClose>
+          <DialogClose asChild><Button type="button" variant="ghost" size="icon" aria-label="Close"><X className="size-4" /></Button></DialogClose>
         </DialogHeader>
 
         <div className="mt-6 grid gap-5 lg:grid-cols-[minmax(0,1fr)_16rem]">
           <div className="min-w-0 space-y-4">
             <Field className="gap-2">
-              <FieldLabel htmlFor="game-title">Spieltitel</FieldLabel>
+              <FieldLabel htmlFor="game-title">Game title</FieldLabel>
               <div className="flex flex-col gap-2 sm:flex-row">
                 <Input id="game-title" value={title} onChange={(event) => setTitle(event.target.value)} autoFocus required />
                 <Button type="button" variant="secondary" disabled={searching || title.trim().length < 2} onClick={() => void searchOnline()}>
-                  {searching ? <Spinner /> : <Search className="size-4" />} Online suchen
+                  {searching ? <Spinner /> : <Search className="size-4" />} Search online
                 </Button>
               </div>
             </Field>
 
             {results.length > 0 ? (
-              <div className="space-y-2" aria-label="RAWG-Suchergebnisse">
+              <div className="space-y-2" aria-label="RAWG search results">
                 {results.map((result) => (
                   <Card key={result.providerId} className="flex items-center gap-3 bg-muted/30 p-3">
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-semibold">{result.title}</p>
-                      <p className="mt-1 truncate text-[11px] text-muted-foreground">{[result.releaseYear, ...result.platforms.slice(0, 2)].filter(Boolean).join(" · ") || "Keine Zusatzdaten"}</p>
+                      <p className="mt-1 truncate text-[11px] text-muted-foreground">{[result.releaseYear, ...result.platforms.slice(0, 2)].filter(Boolean).join(" · ") || "No additional details"}</p>
                     </div>
                     <Button type="button" size="sm" disabled={Boolean(applyingId)} onClick={() => void chooseResult(result)}>
-                      {applyingId === result.providerId ? <Spinner className="size-3.5" /> : <Check className="size-3.5" />} Übernehmen
+                      {applyingId === result.providerId ? <Spinner className="size-3.5" /> : <Check className="size-3.5" />} Apply
                     </Button>
                   </Card>
                 ))}
@@ -130,19 +130,19 @@ export function MetadataEditor({ game, onClose }: { game: Game; onClose: () => v
 
             <Separator />
             <FieldGroup className="grid gap-4 sm:grid-cols-2">
-              <Field className="gap-2"><FieldLabel htmlFor="release-year">Erscheinungsjahr</FieldLabel><Input id="release-year" type="number" min="1970" max="2100" value={releaseYear} onChange={(event) => setReleaseYear(event.target.value)} placeholder="2026" /></Field>
-              <Field className="gap-2"><FieldLabel htmlFor="genres">Genres, kommagetrennt</FieldLabel><Input id="genres" value={genres} onChange={(event) => setGenres(event.target.value)} placeholder="Shooter, Team" /></Field>
-              <Field className="gap-2 sm:col-span-2"><FieldLabel htmlFor="description">Beschreibung</FieldLabel><Textarea id="description" value={description} onChange={(event) => setDescription(event.target.value)} rows={4} placeholder="Eine kurze Beschreibung des Spiels …" /></Field>
+              <Field className="gap-2"><FieldLabel htmlFor="release-year">Release year</FieldLabel><Input id="release-year" type="number" min="1970" max="2100" value={releaseYear} onChange={(event) => setReleaseYear(event.target.value)} placeholder="2026" /></Field>
+              <Field className="gap-2"><FieldLabel htmlFor="genres">Genres, comma-separated</FieldLabel><Input id="genres" value={genres} onChange={(event) => setGenres(event.target.value)} placeholder="Shooter, Team" /></Field>
+              <Field className="gap-2 sm:col-span-2"><FieldLabel htmlFor="description">Description</FieldLabel><Textarea id="description" value={description} onChange={(event) => setDescription(event.target.value)} rows={4} placeholder="A short description of the game …" /></Field>
             </FieldGroup>
           </div>
 
           <aside className="space-y-3 rounded-2xl border bg-muted/20 p-4">
-            <div><p className="text-sm font-semibold">Eigenes Artwork</p><p className="mt-1 text-xs leading-5 text-muted-foreground">Manuelle Bilder überschreiben Provider-Artwork dauerhaft.</p></div>
+            <div><p className="text-sm font-semibold">Custom artwork</p><p className="mt-1 text-xs leading-5 text-muted-foreground">Custom images permanently override provider artwork.</p></div>
             <Button type="button" variant="secondary" className="w-full justify-start" disabled={Boolean(artworkKind)} onClick={() => void chooseArtwork("poster")}>
-              {artworkKind === "poster" ? <Spinner /> : <ImagePlus className="size-4" />} Poster auswählen
+              {artworkKind === "poster" ? <Spinner /> : <ImagePlus className="size-4" />} Choose poster
             </Button>
             <Button type="button" variant="secondary" className="w-full justify-start" disabled={Boolean(artworkKind)} onClick={() => void chooseArtwork("hero")}>
-              {artworkKind === "hero" ? <Spinner /> : <ImagePlus className="size-4" />} Hero auswählen
+              {artworkKind === "hero" ? <Spinner /> : <ImagePlus className="size-4" />} Choose hero
             </Button>
             <div className="flex flex-wrap gap-1.5 pt-2">
               {game.metadataProvider ? <Badge>{game.metadataProvider.toUpperCase()}</Badge> : null}
@@ -151,11 +151,11 @@ export function MetadataEditor({ game, onClose }: { game: Game; onClose: () => v
           </aside>
         </div>
 
-        {error ? <Alert variant="warning" className="mt-5"><AlertTriangle className="mt-0.5 size-4" /><AlertTitle>Aktion nicht möglich</AlertTitle><AlertDescription>{error}</AlertDescription></Alert> : null}
+        {error ? <Alert variant="warning" className="mt-5"><AlertTriangle className="mt-0.5 size-4" /><AlertTitle>Action unavailable</AlertTitle><AlertDescription>{error}</AlertDescription></Alert> : null}
 
         <DialogFooter className="mt-6">
-          <Button type="button" variant="ghost" onClick={onClose}>Abbrechen</Button>
-          <Button type="submit" disabled={saving || !title.trim()}>{saving ? <Spinner /> : <Check className="size-4" />} {saving ? "Speichert …" : "Manuell speichern"}</Button>
+          <Button type="button" variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button type="submit" disabled={saving || !title.trim()}>{saving ? <Spinner /> : <Check className="size-4" />} {saving ? "Saving …" : "Save manually"}</Button>
         </DialogFooter>
       </form>
       </DialogContent>

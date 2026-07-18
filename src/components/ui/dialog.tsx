@@ -23,7 +23,7 @@ export function DialogContent({ className, children, showCloseButton = true, ...
       >
         {children}
         {showCloseButton ? (
-          <DialogPrimitive.Close className="absolute right-4 top-4 grid size-9 place-items-center rounded-lg text-muted-foreground outline-none transition hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary/70" aria-label="Schließen">
+          <DialogPrimitive.Close className="absolute right-4 top-4 grid size-9 place-items-center rounded-lg text-muted-foreground outline-none transition hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary/70" aria-label="Close">
             <X className="size-4" />
           </DialogPrimitive.Close>
         ) : null}

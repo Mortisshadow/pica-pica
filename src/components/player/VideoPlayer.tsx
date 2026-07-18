@@ -40,12 +40,12 @@ export function VideoPlayer({ game, clips, totalCount, selected, hasMore, loadin
                 <div className="max-w-md">
                   {selected && !selected.compatible ? <AlertCircle className="mx-auto size-8 text-amber-300" /> : <MonitorPlay className="mx-auto size-9 text-white/75" />}
                   <p className="mt-4 text-base font-semibold">
-                    {selected && !selected.compatible ? "Dieses Format kann möglicherweise nicht direkt abgespielt werden" : "Wähle einen lokalen Clip aus"}
+                    {selected && !selected.compatible ? "This format may not play directly" : "Choose a local clip"}
                   </p>
                   <p className="mt-2 text-xs leading-5 text-white/50">
                     {libraryClient.isDesktop()
-                      ? "Pica Pica verändert das Original nicht. MP4 mit H.264 und AAC bietet die beste Kompatibilität."
-                      : "Die Browser-Vorschau nutzt Demodaten. In der Desktop-App wird hier dein Originalclip abgespielt."}
+                      ? "Pica Pica never modifies the original. MP4 with H.264 and AAC offers the best compatibility."
+                      : "The browser preview uses demo data. The desktop app plays your original clip here."}
                   </p>
                 </div>
               </div>
@@ -56,7 +56,7 @@ export function VideoPlayer({ game, clips, totalCount, selected, hasMore, loadin
           <div className="mt-5 flex flex-col justify-between gap-4 px-1 sm:flex-row sm:items-start">
             <div className="min-w-0">
               <h2 className="truncate text-lg font-semibold tracking-[-.02em]">{selected.fileName}</h2>
-              <p className="mt-1.5 text-xs text-muted-foreground">Aufgenommen am {formatDate(selected.createdAt, true)}</p>
+              <p className="mt-1.5 text-xs text-muted-foreground">Recorded {formatDate(selected.createdAt, true)}</p>
             </div>
             <div className="flex shrink-0 flex-wrap gap-2">
               <Badge>{formatDuration(selected.durationSeconds)}</Badge>
@@ -70,8 +70,8 @@ export function VideoPlayer({ game, clips, totalCount, selected, hasMore, loadin
 
       {otherClips.length ? <aside className="hidden min-w-0 flex-col overflow-hidden rounded-[1.35rem] border border-white/[.08] bg-white/[.025] p-3 xl:flex xl:max-h-[calc((100vw-24rem)*.5625_+_5rem)] xl:min-h-[440px]">
         <div className="flex shrink-0 items-center justify-between px-2 pb-3 pt-1">
-          <div className="flex items-center gap-2 text-sm font-semibold"><Film className="size-4 text-primary" /> Weitere Clips</div>
-          <span className="text-xs text-muted-foreground">{Math.min(Math.max(totalCount - 1, 0), 12)} von {Math.max(totalCount - 1, 0)}</span>
+          <div className="flex items-center gap-2 text-sm font-semibold"><Film className="size-4 text-primary" /> More clips</div>
+          <span className="text-xs text-muted-foreground">{Math.min(Math.max(totalCount - 1, 0), 12)} of {Math.max(totalCount - 1, 0)}</span>
         </div>
         <div className="grid min-h-0 gap-2 sm:grid-cols-2 xl:auto-rows-max xl:flex-1 xl:content-start xl:grid-cols-1 xl:overflow-y-auto xl:overscroll-contain xl:pr-1">
           {otherClips.map((clip) => (
@@ -84,10 +84,10 @@ export function VideoPlayer({ game, clips, totalCount, selected, hasMore, loadin
     <section className="mt-12 border-t border-white/[.07] pt-9" aria-labelledby="all-clips-title">
       <div className="mb-6 flex items-end justify-between gap-4">
         <div>
-          <p className="text-xs font-bold uppercase tracking-[.18em] text-primary">Deine Sammlung</p>
-          <h2 id="all-clips-title" className="mt-2 text-2xl font-black tracking-[-.04em]">Alle Clips</h2>
+          <p className="text-xs font-bold uppercase tracking-[.18em] text-primary">Your collection</p>
+          <h2 id="all-clips-title" className="mt-2 text-2xl font-black tracking-[-.04em]">All clips</h2>
         </div>
-        <div className="flex items-center gap-2 text-xs text-muted-foreground"><LayoutGrid className="size-4" /> {clips.length} von {totalCount}</div>
+        <div className="flex items-center gap-2 text-xs text-muted-foreground"><LayoutGrid className="size-4" /> {clips.length} of {totalCount}</div>
       </div>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
         {clips.map((clip) => (
@@ -98,7 +98,7 @@ export function VideoPlayer({ game, clips, totalCount, selected, hasMore, loadin
         <div className="mt-8 flex justify-center">
           <Button variant="secondary" onClick={onLoadMore} disabled={loadingMore}>
             {loadingMore ? <Spinner /> : <LayoutGrid className="size-4" />}
-            {loadingMore ? "Weitere Clips werden geladen …" : "Weitere Clips laden"}
+            {loadingMore ? "Loading more clips …" : "Load more clips"}
           </Button>
         </div>
       ) : null}

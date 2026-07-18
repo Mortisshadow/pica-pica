@@ -30,7 +30,7 @@ export const libraryClient = {
   async pickRoot(): Promise<string | null> {
     if (!isTauri()) return "/Demo/OBS Replay Buffer";
     const selected = await open({
-      title: "Ordner mit deinen OBS-Clips auswählen",
+      title: "Choose the folder containing your OBS clips",
       directory: true,
       multiple: false,
     });
@@ -128,10 +128,10 @@ export const libraryClient = {
   async pickArtwork(kind: ArtworkKind): Promise<string | null> {
     if (!isTauri()) return null;
     const selected = await open({
-      title: kind === "hero" ? "Eigenes Hero-Banner auswählen" : "Eigenes Poster auswählen",
+      title: kind === "hero" ? "Choose a custom hero banner" : "Choose a custom poster",
       directory: false,
       multiple: false,
-      filters: [{ name: "Bilder", extensions: ["jpg", "jpeg", "png", "webp"] }],
+      filters: [{ name: "Images", extensions: ["jpg", "jpeg", "png", "webp"] }],
     });
     return typeof selected === "string" ? selected : null;
   },
@@ -142,8 +142,15 @@ export const libraryClient = {
   },
 
   async openExternal(url: string): Promise<void> {
-    if (isTauri()) await openUrl(url);
-    else window.open(url, "_blank", "noopener,noreferrer");
+    const target = new URL(url);
+    if (target.protocol !== "https:") throw new Error("Only secure HTTPS links can be opened.");
+    if (isTauri()) {
+      await openUrl(target.href);
+      return;
+    }
+    const opened = window.open(target.href, "_blank");
+    if (!opened) throw new Error("The browser blocked the new tab. Allow pop-ups and try again.");
+    opened.opener = null;
   },
 
   assetUrl(path: string | null): string | null {
