@@ -15,7 +15,6 @@ use windows::Win32::UI::WindowsAndMessaging::{
 };
 use windows::core::w;
 
-const MPV_FORMAT_STRING: c_int = 1;
 const MPV_FORMAT_FLAG: c_int = 3;
 const MPV_FORMAT_INT64: c_int = 4;
 const MPV_FORMAT_DOUBLE: c_int = 5;
@@ -145,7 +144,7 @@ impl Player {
             ("input-vo-keyboard", "no".to_owned()),
             ("terminal", "no".to_owned()),
         ] {
-            player.set_option(&name, &value)?;
+            player.set_option(name, &value)?;
         }
         let code = unsafe { (player.api.initialize)(player.handle) };
         if code < 0 {
