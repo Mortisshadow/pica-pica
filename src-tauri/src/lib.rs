@@ -4,15 +4,19 @@ mod errors;
 mod library;
 mod metadata;
 mod models;
+mod player;
 mod video;
 
 use commands::{
     AppState, apply_game_metadata, configure_library, get_bootstrap, get_game_clips, get_library,
-    get_provider_settings, save_provider_api_key, scan_library, search_game_metadata,
-    set_custom_artwork, update_game_metadata,
+    get_mpv_availability, get_mpv_snapshot, get_provider_settings, mpv_load_clip, mpv_seek,
+    mpv_select_audio_tracks, mpv_set_muted, mpv_set_paused, mpv_set_viewport, mpv_set_volume,
+    mpv_stop, save_provider_api_key, scan_library, search_game_metadata, set_custom_artwork,
+    update_game_metadata,
 };
 use database::Database;
 use metadata::OnlineMetadataService;
+use player::MpvService;
 use tauri::Manager;
 use video::FfmpegTools;
 
@@ -39,6 +43,7 @@ pub fn run() {
                 database,
                 ffmpeg: FfmpegTools::detect(resource_dir.as_deref()),
                 online_metadata,
+                mpv: MpvService::new(resource_dir.as_deref()),
             });
             Ok(())
         })
@@ -48,6 +53,16 @@ pub fn run() {
             get_game_clips,
             configure_library,
             scan_library,
+            get_mpv_availability,
+            mpv_load_clip,
+            mpv_set_viewport,
+            get_mpv_snapshot,
+            mpv_set_paused,
+            mpv_seek,
+            mpv_set_volume,
+            mpv_set_muted,
+            mpv_select_audio_tracks,
+            mpv_stop,
             update_game_metadata,
             get_provider_settings,
             save_provider_api_key,

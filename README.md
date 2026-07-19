@@ -2,7 +2,7 @@
 
 Pica Pica turns local OBS Replay Buffer clips into a fast, private game library. It scans game folders, builds thumbnails and video metadata locally, and presents everything in a responsive streaming-style desktop interface.
 
-> Milestone 1 is a working local-first prototype. It does not upload, rename, move, transcode, or delete original videos.
+> Milestone 1 is a working local-first prototype. It never uploads, renames, moves, overwrites, or deletes original videos.
 
 ## Highlights
 
@@ -10,11 +10,11 @@ Pica Pica turns local OBS Replay Buffer clips into a fast, private game library.
 - Responsive React 19 interface built from shadcn/ui primitives and shared layout tokens
 - Native folder picker and asynchronous library scans
 - SQLite index with idempotent migrations and stable path-based clip IDs
-- Sidecar-first FFmpeg/ffprobe detection, safe probing, and cached thumbnails
+- Sidecar-first FFmpeg/ffprobe detection, bounded parallel probing, and cached thumbnails
 - Optional RAWG metadata search and SteamGridDB artwork with user-owned API keys
 - Custom poster and hero overrides copied into the local cache
 - Safe unresolved-game workflow with editable local metadata
-- Built-in playback for compatible local MP4/H.264 clips
+- Embedded libmpv playback on Windows for HEVC, multiple audio tracks, and other OBS formats without conversion
 - Browser demo adapter for frontend development without private clip data
 - Reduced-motion support, keyboard focus states, and responsive player layout
 
@@ -30,7 +30,7 @@ The local vertical slice is implemented: onboarding → folder scan → game gal
 - Platform-specific [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/)
 - Optional for development: `ffmpeg` and `ffprobe` on `PATH`; release builds bundle vetted binaries
 
-MP4 with H.264 video and AAC audio is the primary compatibility target. Other files are indexed but may display a playback warning depending on the operating system WebView.
+Windows preview builds include libmpv and play local clips directly without creating compatibility copies. This covers HEVC and multiple audio tracks independently of the WebView codecs. Linux currently keeps the browser-compatible fallback player while a native Render API backend is developed.
 
 ## Development
 
@@ -70,7 +70,7 @@ The manual `Desktop Preview` GitHub Actions workflow builds two unsigned test pa
 
 Open the repository's **Actions** tab, select **Desktop Preview**, choose **Run workflow**, and download the resulting artifact after both jobs finish. Preview artifacts are retained for seven days.
 
-Tagged versions are also published on the repository's [Releases page](https://github.com/Mortisshadow/pica-pica/releases). Preview releases remain unsigned, so Windows may display a SmartScreen warning. Release packages bundle pinned LGPL FFmpeg/ffprobe binaries from a fixed BtbN release, verify their SHA-256 digests before packaging, include provenance and upstream notices, and ship with a `SHA256SUMS.txt` file for the finished installers. The maintainer procedure is documented in [docs/releasing.md](docs/releasing.md).
+Tagged versions are also published on the repository's [Releases page](https://github.com/Mortisshadow/pica-pica/releases). Preview releases remain unsigned, so Windows may display a SmartScreen warning. Release packages bundle pinned FFmpeg/ffprobe binaries and, on Windows, libmpv. The workflows verify fixed SHA-256 digests before packaging, include provenance records, and ship a `SHA256SUMS.txt` file for the finished installers. The maintainer procedure is documented in [docs/releasing.md](docs/releasing.md).
 
 ### Installing on Linux
 
@@ -122,6 +122,7 @@ Pica Pica app data/
 - `src-tauri/src/database` — SQLite access and migrations
 - `src-tauri/src/metadata` — provider abstraction and offline starter catalog
 - `src-tauri/src/video` — FFmpeg/ffprobe adapter
+- `src-tauri/src/player` — embedded libmpv adapter and native Windows video surface
 
 See [docs/architecture.md](docs/architecture.md) for design decisions and extension points.
 See [docs/scalability.md](docs/scalability.md) for the large-library data flow, performance boundaries and remaining background-job work.
@@ -136,7 +137,7 @@ RAWG and SteamGridDB have their own attribution and non-commercial-use terms. Pi
 
 ## FFmpeg releases
 
-Development builds use bundled tools when present and otherwise fall back to `PATH`. Public installers must contain checksum-verified LGPL-compatible FFmpeg builds without optional GPL/non-free codecs. See [docs/ffmpeg-packaging.md](docs/ffmpeg-packaging.md).
+Development builds use bundled tools when present and otherwise fall back to `PATH`. Public installers contain checksum-verified LGPL-compatible FFmpeg builds for probing and thumbnails. See [docs/ffmpeg-packaging.md](docs/ffmpeg-packaging.md).
 
 ## Contributing
 

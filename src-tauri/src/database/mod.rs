@@ -264,6 +264,16 @@ impl Database {
         })
     }
 
+    pub fn clip_path(&self, clip_id: &str) -> AppResult<PathBuf> {
+        let connection = self.connection()?;
+        let path = connection
+            .query_row("SELECT path FROM clips WHERE id = ?1", [clip_id], |row| {
+                Ok(PathBuf::from(row.get::<_, String>(0)?))
+            })
+            .optional()?;
+        path.ok_or_else(|| AppError::InvalidInput("The clip was not found.".to_owned()))
+    }
+
     pub fn update_metadata(&self, update: &MetadataUpdate) -> AppResult<()> {
         if update.title.trim().is_empty() {
             return Err(AppError::InvalidInput(

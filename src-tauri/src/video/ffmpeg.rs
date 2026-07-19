@@ -4,9 +4,14 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, Command, ExitStatus, Stdio};
 use std::time::{Duration, Instant};
 
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
+
 const TOOL_CHECK_TIMEOUT: Duration = Duration::from_secs(3);
 const PROBE_TIMEOUT: Duration = Duration::from_secs(15);
 const THUMBNAIL_TIMEOUT: Duration = Duration::from_secs(30);
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 #[derive(Debug, Default)]
 pub struct VideoInfo {
@@ -66,7 +71,8 @@ impl FfmpegTools {
         if !self.available {
             return VideoInfo::default();
         }
-        let child = Command::new(&self.ffprobe_path)
+        let mut command = hidden_command(&self.ffprobe_path);
+        let child = command
             .args([
                 "-v",
                 "error",
@@ -123,7 +129,8 @@ impl FfmpegTools {
         if std::fs::create_dir_all(parent).is_err() {
             return false;
         }
-        let child = Command::new(&self.ffmpeg_path)
+        let mut command = hidden_command(&self.ffmpeg_path);
+        let child = command
             .args(["-loglevel", "error", "-ss", "00:00:01", "-i"])
             .arg(input)
             .args([
@@ -147,7 +154,7 @@ impl FfmpegTools {
 }
 
 fn tool_works(path: &Path) -> bool {
-    Command::new(path)
+    hidden_command(path)
         .arg("-version")
         .stdin(Stdio::null())
         .stdout(Stdio::null())
@@ -156,6 +163,18 @@ fn tool_works(path: &Path) -> bool {
         .ok()
         .and_then(|child| wait_for_child(child, TOOL_CHECK_TIMEOUT))
         .is_some_and(|(status, _)| status.success())
+}
+
+#[cfg(windows)]
+fn hidden_command(path: &Path) -> Command {
+    let mut command = Command::new(path);
+    command.creation_flags(CREATE_NO_WINDOW);
+    command
+}
+
+#[cfg(not(windows))]
+fn hidden_command(path: &Path) -> Command {
+    Command::new(path)
 }
 
 fn wait_for_child(mut child: Child, timeout: Duration) -> Option<(ExitStatus, Vec<u8>)> {
