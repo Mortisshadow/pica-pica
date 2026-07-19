@@ -176,15 +176,23 @@ pub fn mpv_set_muted(
 }
 
 #[tauri::command]
-pub fn mpv_select_audio_track(
+pub fn mpv_select_audio_tracks(
     session_id: u64,
-    track_id: i64,
+    track_ids: Vec<i64>,
     state: State<'_, AppState>,
 ) -> AppResult<MpvSnapshot> {
-    if track_id <= 0 {
-        return Err(AppError::InvalidInput("Invalid audio track.".to_owned()));
+    if track_ids.is_empty()
+        || track_ids.len() > 16
+        || track_ids.iter().any(|track_id| *track_id <= 0)
+        || track_ids
+            .iter()
+            .collect::<std::collections::HashSet<_>>()
+            .len()
+            != track_ids.len()
+    {
+        return Err(AppError::InvalidInput("Invalid audio tracks.".to_owned()));
     }
-    state.mpv.select_audio_track(session_id, track_id)
+    state.mpv.select_audio_tracks(session_id, track_ids)
 }
 
 #[tauri::command]

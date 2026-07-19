@@ -1,4 +1,4 @@
-import { AlertCircle, Play } from "lucide-react";
+import { Play } from "lucide-react";
 import { libraryClient } from "@/data/library-client";
 import { cn, formatBytes, formatDate, formatDuration } from "@/lib/utils";
 import type { Clip, Game } from "@/types/library";
@@ -42,7 +42,6 @@ export function ClipCard({ clip, game, active, onSelect }: ClipCardProps) {
           <span>{formatDate(clip.createdAt, true)}</span>
           <span>·</span>
           <span>{formatBytes(clip.sizeBytes)}</span>
-          {!clip.compatible ? <AlertCircle className="ml-auto size-3.5 text-amber-300" /> : null}
         </p>
       </div>
     </button>

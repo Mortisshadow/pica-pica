@@ -4,7 +4,6 @@ import { ClipCard } from "@/components/library/ClipCard";
 import { GameArtwork } from "@/components/library/GameArtwork";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Spinner } from "@/components/ui/spinner";
 import { libraryClient } from "@/data/library-client";
 import { cn, formatBytes, formatDate, formatDuration } from "@/lib/utils";
@@ -198,6 +197,7 @@ function NativeMpvPlayer({ game, selected, active, onSurfaceHeight }: { game: Ga
           height: Math.round(rect.height * scale),
           visible: active && (fullscreen || visibleRatio >= 0.18),
           cornerRadius: fullscreen ? 0 : Math.round(22 * scale),
+          clipTop: fullscreen ? 0 : Math.round(Math.max(0, 69 - rect.top) * scale),
         }).catch(() => undefined);
       });
     };
@@ -218,7 +218,7 @@ function NativeMpvPlayer({ game, selected, active, onSurfaceHeight }: { game: Ga
       window.removeEventListener("resize", update);
       window.visualViewport?.removeEventListener("resize", update);
       window.visualViewport?.removeEventListener("scroll", update);
-      void libraryClient.mpvViewport({ x: 0, y: 0, width: 0, height: 0, visible: false, cornerRadius: 0 }).catch(() => undefined);
+      void libraryClient.mpvViewport({ x: 0, y: 0, width: 0, height: 0, visible: false, cornerRadius: 0, clipTop: 0 }).catch(() => undefined);
     };
   }, [active, availability?.available, current?.sessionId, fullscreen, onSurfaceHeight, playerReady]);
 
@@ -234,7 +234,16 @@ function NativeMpvPlayer({ game, selected, active, onSurfaceHeight }: { game: Ga
       .catch((cause) => setPlayback((value) => value?.sessionId === sessionId ? { ...value, error: cause instanceof Error ? cause.message : String(cause) } : value));
   };
 
-  const selectedAudio = snapshot?.audioTracks.find((track) => track.selected)?.id;
+  const selectedAudioIds = snapshot?.audioTracks.filter((track) => track.selected).map((track) => track.id) ?? [];
+
+  const toggleAudioTrack = (trackId: number, selected: boolean) => {
+    if (!snapshot) return;
+    const nextIds = selected
+      ? [...new Set([...selectedAudioIds, trackId])]
+      : selectedAudioIds.filter((id) => id !== trackId);
+    if (!nextIds.length) return;
+    updateSnapshot(libraryClient.mpvAudioTracks(snapshot.sessionId, nextIds));
+  };
 
   const toggleFullscreen = () => {
     const next = !fullscreen;
@@ -316,20 +325,23 @@ function NativeMpvPlayer({ game, selected, active, onSurfaceHeight }: { game: Ga
             className="h-2 w-24 cursor-pointer accent-white"
           />
           {snapshot.audioTracks.length > 1 ? (
-            <div className="flex min-w-44 items-center gap-2">
+            <div className="flex min-w-0 max-w-[min(30rem,38vw)] items-center gap-2" role="group" aria-label="Included audio tracks">
               <Headphones className="size-4 shrink-0 text-muted-foreground" />
-              <NativeSelect
-                size="sm"
-                aria-label="Audio track"
-                value={selectedAudio ?? snapshot.audioTracks[0]?.id}
-                onChange={(event) => updateSnapshot(libraryClient.mpvAudioTrack(snapshot.sessionId, Number(event.target.value)))}
-              >
+              <div className="flex min-w-0 gap-1.5 overflow-x-auto pb-0.5">
                 {snapshot.audioTracks.map((track, index) => (
-                  <NativeSelectOption key={track.id} value={track.id}>
-                    {track.title ?? track.language ?? `Audio ${index + 1}`}{track.codec ? ` · ${track.codec.toUpperCase()}` : ""}
-                  </NativeSelectOption>
+                  <label key={track.id} className="flex shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border border-white/[.09] bg-white/[.035] px-2.5 py-2 text-xs text-white/75 transition hover:bg-white/[.07]">
+                    <input
+                      type="checkbox"
+                      checked={track.selected}
+                      disabled={track.selected && selectedAudioIds.length === 1}
+                      onChange={(event) => toggleAudioTrack(track.id, event.target.checked)}
+                      className="size-3.5 accent-white"
+                    />
+                    <span>{track.title ?? track.language ?? `Audio ${index + 1}`}</span>
+                    {track.codec ? <span className="text-[10px] uppercase text-muted-foreground">{track.codec}</span> : null}
+                  </label>
                 ))}
-              </NativeSelect>
+              </div>
             </div>
           ) : null}
           <Button size="icon" variant="ghost" aria-label={fullscreen ? "Exit fullscreen" : "Enter fullscreen"} title={fullscreen ? "Exit fullscreen (Esc)" : "Fullscreen (F)"} onClick={toggleFullscreen}>

@@ -107,8 +107,8 @@ export const libraryClient = {
     return invoke<MpvSnapshot>("mpv_set_muted", { sessionId, muted });
   },
 
-  async mpvAudioTrack(sessionId: number, trackId: number): Promise<MpvSnapshot> {
-    return invoke<MpvSnapshot>("mpv_select_audio_track", { sessionId, trackId });
+  async mpvAudioTracks(sessionId: number, trackIds: number[]): Promise<MpvSnapshot> {
+    return invoke<MpvSnapshot>("mpv_select_audio_tracks", { sessionId, trackIds });
   },
 
   async mpvStop(sessionId: number): Promise<void> {

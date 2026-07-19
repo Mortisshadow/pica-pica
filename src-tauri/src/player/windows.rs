@@ -117,6 +117,7 @@ struct Player {
     host: HWND,
     session_id: u64,
     status: String,
+    mixed_audio_tracks: Vec<i64>,
 }
 
 unsafe impl Send for Player {}
@@ -133,6 +134,7 @@ impl Player {
             host,
             session_id: 0,
             status: "idle".to_owned(),
+            mixed_audio_tracks: Vec::new(),
         };
         let wid = host.0 as usize as u32;
         for (name, value) in [
@@ -186,6 +188,7 @@ impl Player {
         let path = path.to_string_lossy();
         self.session_id = session_id;
         self.status = "loading".to_owned();
+        self.mixed_audio_tracks.clear();
         self.command(&["loadfile", &path, "replace"])
     }
 
@@ -315,9 +318,12 @@ impl Player {
                 language: self.get_string(&format!("track-list/{index}/lang")),
                 codec: self.get_string(&format!("track-list/{index}/codec")),
                 channels: self.get_string(&format!("track-list/{index}/audio-channels")),
-                selected: self
-                    .get_flag(&format!("track-list/{index}/selected"))
-                    .unwrap_or(false),
+                selected: if self.mixed_audio_tracks.is_empty() {
+                    self.get_flag(&format!("track-list/{index}/selected"))
+                        .unwrap_or(false)
+                } else {
+                    self.mixed_audio_tracks.contains(&id)
+                },
             });
         }
         MpvSnapshot {
@@ -331,6 +337,25 @@ impl Player {
             audio_tracks,
             error: None,
         }
+    }
+
+    fn select_audio_tracks(&mut self, track_ids: &[i64]) -> Result<(), String> {
+        if track_ids.len() == 1 {
+            self.set_string("lavfi-complex", "")?;
+            self.set_string("aid", &track_ids[0].to_string())?;
+        } else {
+            let inputs = track_ids
+                .iter()
+                .map(|track_id| format!("[aid{track_id}]"))
+                .collect::<String>();
+            let filter = format!(
+                "{inputs}amix=inputs={}:duration=longest:dropout_transition=0[ao]",
+                track_ids.len()
+            );
+            self.set_string("lavfi-complex", &filter)?;
+        }
+        self.mixed_audio_tracks = track_ids.to_vec();
+        Ok(())
     }
 }
 
@@ -452,7 +477,7 @@ impl MpvService {
             }
             let region = CreateRoundRectRgn(
                 0,
-                0,
+                viewport.clip_top.clamp(0, viewport.height),
                 viewport.width + 1,
                 viewport.height + 1,
                 viewport.corner_radius * 2,
@@ -488,7 +513,7 @@ impl MpvService {
     fn with_session(
         &self,
         session_id: u64,
-        action: impl FnOnce(&Player) -> Result<(), String>,
+        action: impl FnOnce(&mut Player) -> Result<(), String>,
     ) -> AppResult<MpvSnapshot> {
         let mut guard = self
             .player
@@ -524,10 +549,12 @@ impl MpvService {
         self.with_session(session_id, |player| player.set_flag("mute", muted))
     }
 
-    pub fn select_audio_track(&self, session_id: u64, track_id: i64) -> AppResult<MpvSnapshot> {
-        self.with_session(session_id, |player| {
-            player.set_string("aid", &track_id.to_string())
-        })
+    pub fn select_audio_tracks(
+        &self,
+        session_id: u64,
+        track_ids: Vec<i64>,
+    ) -> AppResult<MpvSnapshot> {
+        self.with_session(session_id, |player| player.select_audio_tracks(&track_ids))
     }
 
     pub fn stop(&self, session_id: u64) -> AppResult<()> {

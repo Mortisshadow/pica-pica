@@ -25,6 +25,7 @@ pub struct MpvViewport {
     pub height: i32,
     pub visible: bool,
     pub corner_radius: i32,
+    pub clip_top: i32,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -114,7 +115,11 @@ impl MpvService {
         self.snapshot()
     }
 
-    pub fn select_audio_track(&self, _session_id: u64, _track_id: i64) -> AppResult<MpvSnapshot> {
+    pub fn select_audio_tracks(
+        &self,
+        _session_id: u64,
+        _track_ids: Vec<i64>,
+    ) -> AppResult<MpvSnapshot> {
         self.snapshot()
     }
 
