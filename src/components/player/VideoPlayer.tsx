@@ -1,4 +1,4 @@
-import { AlertCircle, Film, Headphones, LayoutGrid, MonitorPlay, Pause, Play, Volume2, VolumeX } from "lucide-react";
+import { AlertCircle, Film, Headphones, LayoutGrid, Maximize2, MonitorPlay, Pause, Play, Volume2, VolumeX } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { ClipCard } from "@/components/library/ClipCard";
 import { GameArtwork } from "@/components/library/GameArtwork";
@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Spinner } from "@/components/ui/spinner";
 import { libraryClient } from "@/data/library-client";
-import { formatBytes, formatDate, formatDuration } from "@/lib/utils";
+import { cn, formatBytes, formatDate, formatDuration } from "@/lib/utils";
 import type { Clip, Game } from "@/types/library";
 import type { MpvAvailability, MpvSnapshot } from "@/types/player";
 
@@ -26,13 +26,14 @@ interface VideoPlayerProps {
 }
 
 export function VideoPlayer({ game, clips, totalCount, selected, hasMore, loadingMore, playerActive = true, onLoadMore, onSelect }: VideoPlayerProps) {
-  const otherClips = (selected ? clips.filter((clip) => clip.id !== selected.id) : clips).slice(0, 12);
+  const otherClips = clips.slice(0, 12);
+  const [playerSurfaceHeight, setPlayerSurfaceHeight] = useState<number | null>(null);
 
   return (
     <div>
-    <div className={`grid gap-5 ${otherClips.length ? "xl:grid-cols-[minmax(0,1fr)_340px]" : ""}`}>
+    <div className={`mx-auto grid w-full max-w-[min(100%,calc(177.78vh+102px))] items-start gap-5 ${otherClips.length ? "xl:grid-cols-[minmax(0,1fr)_clamp(340px,20vw,480px)]" : ""}`}>
       <div className="min-w-0">
-        <NativeMpvPlayer game={game} selected={selected} active={playerActive} />
+        <NativeMpvPlayer game={game} selected={selected} active={playerActive} onSurfaceHeight={setPlayerSurfaceHeight} />
         {selected ? (
           <div className="mt-5 flex flex-col justify-between gap-4 px-1 sm:flex-row sm:items-start">
             <div className="min-w-0">
@@ -49,10 +50,10 @@ export function VideoPlayer({ game, clips, totalCount, selected, hasMore, loadin
         ) : null}
       </div>
 
-      {otherClips.length ? <aside className="hidden min-w-0 flex-col overflow-hidden rounded-[1.35rem] border border-white/[.08] bg-white/[.025] p-3 xl:flex xl:max-h-[calc((100vw-24rem)*.5625_+_5rem)] xl:min-h-[440px]">
+      {otherClips.length ? <aside data-clip-queue style={{ height: playerSurfaceHeight ?? undefined }} className="hidden min-w-0 flex-col overflow-hidden rounded-[1.35rem] border border-white/[.08] bg-white/[.025] p-3 xl:flex">
         <div className="flex shrink-0 items-center justify-between px-2 pb-3 pt-1">
           <div className="flex items-center gap-2 text-sm font-semibold"><Film className="size-4 text-primary" /> More clips</div>
-          <span className="text-xs text-muted-foreground">{Math.min(Math.max(totalCount - 1, 0), 12)} of {Math.max(totalCount - 1, 0)}</span>
+          <span className="text-xs text-muted-foreground">{Math.min(totalCount, 12)} of {totalCount}</span>
         </div>
         <div className="grid min-h-0 gap-2 sm:grid-cols-2 xl:auto-rows-max xl:flex-1 xl:content-start xl:grid-cols-1 xl:overflow-y-auto xl:overscroll-contain xl:pr-1">
           {otherClips.map((clip) => (
@@ -70,7 +71,7 @@ export function VideoPlayer({ game, clips, totalCount, selected, hasMore, loadin
         </div>
         <div className="flex items-center gap-2 text-xs text-muted-foreground"><LayoutGrid className="size-4" /> {clips.length} of {totalCount}</div>
       </div>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 [@media(min-width:2200px)]:grid-cols-5 [@media(min-width:3000px)]:grid-cols-6">
         {clips.map((clip) => (
           <ClipCard key={clip.id} clip={clip} game={game} active={clip.id === selected?.id} onSelect={() => onSelect(clip)} />
         ))}
@@ -88,10 +89,11 @@ export function VideoPlayer({ game, clips, totalCount, selected, hasMore, loadin
   );
 }
 
-function NativeMpvPlayer({ game, selected, active }: { game: Game; selected: Clip | null; active: boolean }) {
+function NativeMpvPlayer({ game, selected, active, onSurfaceHeight }: { game: Game; selected: Clip | null; active: boolean; onSurfaceHeight: (height: number) => void }) {
   const surfaceRef = useRef<HTMLDivElement>(null);
   const [availability, setAvailability] = useState<MpvAvailability | null>(null);
   const [playback, setPlayback] = useState<{ clipId: string; sessionId: number; snapshot: MpvSnapshot | null; error: string | null } | null>(null);
+  const [fullscreen, setFullscreen] = useState(false);
   const current = playback?.clipId === selected?.id ? playback : null;
   const snapshot = current?.snapshot ?? null;
   const playerReady = Boolean(snapshot);
@@ -107,6 +109,16 @@ function NativeMpvPlayer({ game, selected, active }: { game: Game; selected: Cli
       .catch((cause) => mounted && setAvailability({ available: false, version: null, diagnostic: cause instanceof Error ? cause.message : String(cause) }));
     return () => { mounted = false; };
   }, []);
+
+  useEffect(() => {
+    const surface = surfaceRef.current;
+    if (!surface) return;
+    const reportHeight = () => onSurfaceHeight(surface.getBoundingClientRect().height);
+    const observer = new ResizeObserver(reportHeight);
+    observer.observe(surface);
+    reportHeight();
+    return () => observer.disconnect();
+  }, [onSurfaceHeight]);
 
   useEffect(() => {
     if (!selected || !availability?.available) return;
@@ -125,6 +137,25 @@ function NativeMpvPlayer({ game, selected, active }: { game: Game; selected: Cli
       void libraryClient.mpvStop(sessionId).catch(() => undefined);
     };
   }, [availability?.available, selected]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && fullscreen) {
+        void libraryClient.setFullscreen(false).then(() => setFullscreen(false));
+      } else if (event.key.toLocaleLowerCase() === "f" && !event.ctrlKey && !event.metaKey && !event.altKey) {
+        const target = event.target as HTMLElement | null;
+        if (target?.matches("input, textarea, select")) return;
+        const next = !fullscreen;
+        void libraryClient.setFullscreen(next).then(() => setFullscreen(next));
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [fullscreen]);
+
+  useEffect(() => () => {
+    if (fullscreen) void libraryClient.setFullscreen(false);
+  }, [fullscreen]);
 
   useEffect(() => {
     if (!current?.sessionId || !playerReady) return;
@@ -154,14 +185,19 @@ function NativeMpvPlayer({ game, selected, active }: { game: Game; selected: Cli
       frame = window.requestAnimationFrame(() => {
         const rect = surface.getBoundingClientRect();
         const scale = window.devicePixelRatio || 1;
-        const fullyVisible = rect.top >= 69 && rect.left >= 0 && rect.right <= window.innerWidth && rect.bottom <= window.innerHeight;
+        const visibleLeft = Math.max(rect.left, 0);
+        const visibleTop = Math.max(rect.top, fullscreen ? 0 : 69);
+        const visibleRight = Math.min(rect.right, window.innerWidth);
+        const visibleBottom = Math.min(rect.bottom, window.innerHeight);
+        const visibleArea = Math.max(0, visibleRight - visibleLeft) * Math.max(0, visibleBottom - visibleTop);
+        const visibleRatio = visibleArea / Math.max(1, rect.width * rect.height);
         void libraryClient.mpvViewport({
           x: Math.round(rect.left * scale),
           y: Math.round(rect.top * scale),
           width: Math.round(rect.width * scale),
           height: Math.round(rect.height * scale),
-          visible: active && fullyVisible,
-          cornerRadius: Math.round(22 * scale),
+          visible: active && (fullscreen || visibleRatio >= 0.18),
+          cornerRadius: fullscreen ? 0 : Math.round(22 * scale),
         }).catch(() => undefined);
       });
     };
@@ -184,7 +220,7 @@ function NativeMpvPlayer({ game, selected, active }: { game: Game; selected: Cli
       window.visualViewport?.removeEventListener("scroll", update);
       void libraryClient.mpvViewport({ x: 0, y: 0, width: 0, height: 0, visible: false, cornerRadius: 0 }).catch(() => undefined);
     };
-  }, [active, availability?.available, current?.sessionId, playerReady]);
+  }, [active, availability?.available, current?.sessionId, fullscreen, onSurfaceHeight, playerReady]);
 
   const updateSnapshot = (operation: Promise<MpvSnapshot>) => {
     const sessionId = current?.sessionId;
@@ -200,9 +236,20 @@ function NativeMpvPlayer({ game, selected, active }: { game: Game; selected: Cli
 
   const selectedAudio = snapshot?.audioTracks.find((track) => track.selected)?.id;
 
+  const toggleFullscreen = () => {
+    const next = !fullscreen;
+    void libraryClient
+      .setFullscreen(next)
+      .then(() => setFullscreen(next))
+      .catch(() => undefined);
+  };
+
   return (
     <div>
-      <div ref={surfaceRef} className="relative aspect-video overflow-hidden rounded-[1.35rem] border border-white/10 bg-[#050506] shadow-[0_24px_80px_rgba(0,0,0,.35)]">
+      <div ref={surfaceRef} data-player-surface className={cn(
+        "relative aspect-video overflow-hidden rounded-[1.35rem] border border-white/10 bg-[#050506] shadow-[0_24px_80px_rgba(0,0,0,.35)]",
+        fullscreen && "fixed inset-0 z-[100] aspect-auto rounded-none border-0 shadow-none",
+      )}>
         {!availability ? (
           <div className="absolute inset-0 grid place-items-center"><Spinner className="size-6" /></div>
         ) : !availability.available && fallbackUrl ? (
@@ -224,8 +271,9 @@ function NativeMpvPlayer({ game, selected, active }: { game: Game; selected: Cli
         ) : null}
       </div>
 
-      {availability?.available && snapshot ? (
-        <div className="mt-3 flex flex-col gap-3 rounded-2xl border border-white/[.08] bg-white/[.025] p-3 sm:flex-row sm:items-center">
+      {availability?.available && !fullscreen ? (
+        <div className="mt-3 flex min-h-16 flex-col gap-3 rounded-2xl border border-white/[.08] bg-white/[.025] p-3 sm:flex-row sm:items-center">
+          {snapshot ? <>
           <Button
             size="icon"
             variant="secondary"
@@ -281,6 +329,10 @@ function NativeMpvPlayer({ game, selected, active }: { game: Game; selected: Cli
               </NativeSelect>
             </div>
           ) : null}
+          <Button size="icon" variant="ghost" aria-label="Enter fullscreen" title="Fullscreen (F)" onClick={toggleFullscreen}>
+            <Maximize2 className="size-4" />
+          </Button>
+          </> : <div className="flex w-full items-center justify-center gap-2 text-xs text-muted-foreground"><Spinner /> Loading player …</div>}
         </div>
       ) : null}
     </div>

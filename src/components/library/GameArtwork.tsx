@@ -34,11 +34,14 @@ export function GameArtwork({ title, start, end, variant = "poster", imageUrl, c
           fetchPriority={variant === "hero" ? "high" : "auto"}
           className="absolute inset-0 size-full object-cover"
         />
-      ) : null}
-      <div className="absolute -right-[18%] -top-[10%] size-[70%] rounded-full border-[1.8rem] border-white/[.08]" />
-      <div className="absolute -bottom-[24%] -left-[24%] size-[72%] rotate-12 rounded-[28%] bg-black/20" />
-      <div className="noise" />
-      {variant === "poster" ? (
+      ) : (
+        <>
+          <div className="absolute -right-[18%] -top-[10%] size-[70%] rounded-full border-[1.8rem] border-white/[.08]" />
+          <div className="absolute -bottom-[24%] -left-[24%] size-[72%] rotate-12 rounded-[28%] bg-black/20" />
+          <div className="noise" />
+        </>
+      )}
+      {!imageUrl && variant === "poster" ? (
         <div className="absolute inset-0 flex flex-col justify-between p-[12%]">
           <div className="flex items-center gap-2 text-[10px] font-bold tracking-[.24em] text-white/55">
             <Film className="size-3" /> PICA PICA
@@ -55,7 +58,7 @@ export function GameArtwork({ title, start, end, variant = "poster", imageUrl, c
           </div>
         </div>
       ) : null}
-      {variant === "thumbnail" ? (
+      {!imageUrl && variant === "thumbnail" ? (
         <div className="absolute inset-0 grid place-items-center text-3xl font-black tracking-[-.06em] text-white/45">{initials}</div>
       ) : null}
     </div>

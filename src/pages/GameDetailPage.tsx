@@ -91,7 +91,7 @@ export function GameDetailPage() {
         </motion.div>
         <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(8,9,11,.94)_0%,rgba(8,9,11,.62)_42%,rgba(8,9,11,.12)_72%),linear-gradient(0deg,#08090b_0%,transparent_48%)]" />
         <div className="noise" />
-        <motion.div style={{ y: contentY }} className="relative mx-auto w-full max-w-[1640px] px-5 pb-20 pt-32 sm:px-8 lg:px-10 lg:pb-24">
+        <motion.div style={{ y: contentY }} className="relative mx-auto w-full max-w-[3200px] px-5 pb-20 pt-32 sm:px-8 lg:px-10 lg:pb-24">
           <Button asChild variant="secondary" size="sm" className="mb-10 bg-black/25 backdrop-blur-md">
             <Link to="/library"><ArrowLeft className="size-4" /> Library</Link>
           </Button>
@@ -119,7 +119,7 @@ export function GameDetailPage() {
         </motion.div>
       </section>
 
-      <section id="clips" className="relative z-10 mx-auto max-w-[1640px] px-5 pb-24 pt-8 sm:px-8 lg:px-10 lg:pt-12">
+      <section id="clips" className="relative z-10 mx-auto max-w-[3200px] px-5 pb-24 pt-8 sm:px-8 lg:px-10 lg:pt-12">
         <div className="mb-7">
           <p className="text-xs font-bold uppercase tracking-[.18em] text-primary">Replay Buffer</p>
           <h2 className="mt-2 text-3xl font-black tracking-[-.045em]">Your latest moments</h2>
