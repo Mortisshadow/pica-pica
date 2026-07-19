@@ -1,4 +1,4 @@
-import { AlertCircle, Film, Headphones, LayoutGrid, Maximize2, MonitorPlay, Pause, Play, Volume2, VolumeX } from "lucide-react";
+import { AlertCircle, Film, Headphones, LayoutGrid, Maximize2, Minimize2, MonitorPlay, Pause, Play, Volume2, VolumeX } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { ClipCard } from "@/components/library/ClipCard";
 import { GameArtwork } from "@/components/library/GameArtwork";
@@ -248,7 +248,7 @@ function NativeMpvPlayer({ game, selected, active, onSurfaceHeight }: { game: Ga
     <div>
       <div ref={surfaceRef} data-player-surface className={cn(
         "relative aspect-video overflow-hidden rounded-[1.35rem] border border-white/10 bg-[#050506] shadow-[0_24px_80px_rgba(0,0,0,.35)]",
-        fullscreen && "fixed inset-0 z-[100] aspect-auto rounded-none border-0 shadow-none",
+        fullscreen && "fixed bottom-20 left-0 right-0 top-0 z-[100] aspect-auto rounded-none border-0 shadow-none",
       )}>
         {!availability ? (
           <div className="absolute inset-0 grid place-items-center"><Spinner className="size-6" /></div>
@@ -271,8 +271,11 @@ function NativeMpvPlayer({ game, selected, active, onSurfaceHeight }: { game: Ga
         ) : null}
       </div>
 
-      {availability?.available && !fullscreen ? (
-        <div className="mt-3 flex min-h-16 flex-col gap-3 rounded-2xl border border-white/[.08] bg-white/[.025] p-3 sm:flex-row sm:items-center">
+      {availability?.available ? (
+        <div className={cn(
+          "mt-3 flex min-h-16 flex-col gap-3 rounded-2xl border border-white/[.08] bg-white/[.025] p-3 sm:flex-row sm:items-center",
+          fullscreen && "fixed inset-x-0 bottom-0 z-[101] m-0 min-h-20 rounded-none border-x-0 border-b-0 bg-black px-5",
+        )}>
           {snapshot ? <>
           <Button
             size="icon"
@@ -329,8 +332,8 @@ function NativeMpvPlayer({ game, selected, active, onSurfaceHeight }: { game: Ga
               </NativeSelect>
             </div>
           ) : null}
-          <Button size="icon" variant="ghost" aria-label="Enter fullscreen" title="Fullscreen (F)" onClick={toggleFullscreen}>
-            <Maximize2 className="size-4" />
+          <Button size="icon" variant="ghost" aria-label={fullscreen ? "Exit fullscreen" : "Enter fullscreen"} title={fullscreen ? "Exit fullscreen (Esc)" : "Fullscreen (F)"} onClick={toggleFullscreen}>
+            {fullscreen ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
           </Button>
           </> : <div className="flex w-full items-center justify-center gap-2 text-xs text-muted-foreground"><Spinner /> Loading player …</div>}
         </div>
