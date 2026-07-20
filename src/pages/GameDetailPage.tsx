@@ -51,16 +51,18 @@ export function GameDetailPage() {
 
   const selected: Clip | null = clips.find((clip) => clip.id === selectedId) ?? clips[0] ?? null;
 
-  async function loadMore() {
-    if (!gameId || !nextCursor || clipsLoading) return;
+  async function loadMore(): Promise<Clip[]> {
+    if (!gameId || !nextCursor || clipsLoading) return [];
     setClipsLoading(true);
     setClipError(null);
     try {
       const page = await libraryClient.gameClips(gameId, nextCursor, CLIP_PAGE_SIZE);
       setClips((current) => [...current, ...page.clips]);
       setNextCursor(page.nextCursor);
+      return page.clips;
     } catch (cause) {
       setClipError(String(cause));
+      return [];
     } finally {
       setClipsLoading(false);
     }
@@ -140,7 +142,7 @@ export function GameDetailPage() {
             hasMore={Boolean(nextCursor)}
             loadingMore={clipsLoading}
             playerActive={!editing}
-            onLoadMore={() => void loadMore()}
+            onLoadMore={loadMore}
             onSelect={(clip) => setSelectedId(clip.id)}
           />
         ) : clipsLoading ? (

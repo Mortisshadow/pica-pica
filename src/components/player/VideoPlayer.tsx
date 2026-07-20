@@ -1,9 +1,11 @@
-import { AlertCircle, Film, Headphones, LayoutGrid, Maximize2, Minimize2, MonitorPlay, Pause, Play, Volume2, VolumeX } from "lucide-react";
+import { AlertCircle, ChevronDown, ChevronLeft, ChevronRight, Film, Headphones, LayoutGrid, Maximize2, Minimize2, MonitorPlay, Pause, Play, Volume2, VolumeX } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { ClipCard } from "@/components/library/ClipCard";
 import { GameArtwork } from "@/components/library/GameArtwork";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Slider } from "@/components/ui/slider";
 import { Spinner } from "@/components/ui/spinner";
 import { libraryClient } from "@/data/library-client";
 import { cn, formatBytes, formatDate, formatDuration } from "@/lib/utils";
@@ -20,19 +22,42 @@ interface VideoPlayerProps {
   hasMore: boolean;
   loadingMore: boolean;
   playerActive?: boolean;
-  onLoadMore: () => void;
+  onLoadMore: () => Promise<Clip[]>;
   onSelect: (clip: Clip) => void;
 }
 
 export function VideoPlayer({ game, clips, totalCount, selected, hasMore, loadingMore, playerActive = true, onLoadMore, onSelect }: VideoPlayerProps) {
   const otherClips = clips.slice(0, 12);
   const [playerSurfaceHeight, setPlayerSurfaceHeight] = useState<number | null>(null);
+  const selectedIndex = selected ? clips.findIndex((clip) => clip.id === selected.id) : -1;
+  const previousClip = selectedIndex > 0 ? clips[selectedIndex - 1] : null;
+  const nextClip = selectedIndex >= 0 ? clips[selectedIndex + 1] ?? null : null;
+
+  const selectNextClip = async () => {
+    if (nextClip) {
+      onSelect(nextClip);
+      return;
+    }
+    if (!hasMore) return;
+    const loaded = await onLoadMore();
+    if (loaded[0]) onSelect(loaded[0]);
+  };
 
   return (
     <div>
     <div className={`mx-auto grid w-full max-w-[min(100%,calc(177.78vh+102px))] items-start gap-5 ${otherClips.length ? "xl:grid-cols-[minmax(0,1fr)_clamp(340px,20vw,480px)]" : ""}`}>
       <div className="min-w-0">
-        <NativeMpvPlayer game={game} selected={selected} active={playerActive} onSurfaceHeight={setPlayerSurfaceHeight} />
+        <NativeMpvPlayer
+          game={game}
+          selected={selected}
+          active={playerActive}
+          previousClip={previousClip}
+          nextAvailable={Boolean(nextClip || hasMore)}
+          navigationPending={loadingMore}
+          onPrevious={() => previousClip && onSelect(previousClip)}
+          onNext={() => void selectNextClip()}
+          onSurfaceHeight={setPlayerSurfaceHeight}
+        />
         {selected ? (
           <div className="mt-5 flex flex-col justify-between gap-4 px-1 sm:flex-row sm:items-start">
             <div className="min-w-0">
@@ -77,7 +102,7 @@ export function VideoPlayer({ game, clips, totalCount, selected, hasMore, loadin
       </div>
       {hasMore ? (
         <div className="mt-8 flex justify-center">
-          <Button variant="secondary" onClick={onLoadMore} disabled={loadingMore}>
+          <Button variant="secondary" onClick={() => void onLoadMore()} disabled={loadingMore}>
             {loadingMore ? <Spinner /> : <LayoutGrid className="size-4" />}
             {loadingMore ? "Loading more clips …" : "Load more clips"}
           </Button>
@@ -88,17 +113,38 @@ export function VideoPlayer({ game, clips, totalCount, selected, hasMore, loadin
   );
 }
 
-function NativeMpvPlayer({ game, selected, active, onSurfaceHeight }: { game: Game; selected: Clip | null; active: boolean; onSurfaceHeight: (height: number) => void }) {
+interface NativeMpvPlayerProps {
+  game: Game;
+  selected: Clip | null;
+  active: boolean;
+  previousClip: Clip | null;
+  nextAvailable: boolean;
+  navigationPending: boolean;
+  onPrevious: () => void;
+  onNext: () => void;
+  onSurfaceHeight: (height: number) => void;
+}
+
+function NativeMpvPlayer({ game, selected, active, previousClip, nextAvailable, navigationPending, onPrevious, onNext, onSurfaceHeight }: NativeMpvPlayerProps) {
   const surfaceRef = useRef<HTMLDivElement>(null);
+  const controlsRef = useRef<HTMLDivElement>(null);
+  const seekRequestRef = useRef(0);
+  const volumeRequestRef = useRef(0);
   const [availability, setAvailability] = useState<MpvAvailability | null>(null);
   const [playback, setPlayback] = useState<{ clipId: string; sessionId: number; snapshot: MpvSnapshot | null; error: string | null } | null>(null);
   const [fullscreen, setFullscreen] = useState(false);
+  const [audioMenuOpen, setAudioMenuOpen] = useState(false);
+  const [controlsHeight, setControlsHeight] = useState(96);
+  const [seekDraft, setSeekDraft] = useState<{ sessionId: number; value: number } | null>(null);
+  const [volumeDraft, setVolumeDraft] = useState<{ sessionId: number; value: number } | null>(null);
   const current = playback?.clipId === selected?.id ? playback : null;
   const snapshot = current?.snapshot ?? null;
   const playerReady = Boolean(snapshot);
   const error = current?.error ?? null;
   const fallbackUrl = libraryClient.assetUrl(selected?.compatible ? selected.path : null);
   const posterUrl = libraryClient.assetUrl(selected?.thumbnailPath ?? null);
+  const navigationInset = previousClip || nextAvailable ? 36 : 0;
+  const navigationVerticalInset = navigationInset * 9 / 16;
 
   useEffect(() => {
     let mounted = true;
@@ -120,7 +166,19 @@ function NativeMpvPlayer({ game, selected, active, onSurfaceHeight }: { game: Ga
   }, [onSurfaceHeight]);
 
   useEffect(() => {
+    const controls = controlsRef.current;
+    if (!controls) return;
+    const reportHeight = () => setControlsHeight(Math.ceil(controls.getBoundingClientRect().height));
+    const observer = new ResizeObserver(reportHeight);
+    observer.observe(controls);
+    reportHeight();
+    return () => observer.disconnect();
+  }, [availability?.available]);
+
+  useEffect(() => {
     if (!selected || !availability?.available) return;
+    seekRequestRef.current += 1;
+    volumeRequestRef.current += 1;
     let mounted = true;
     const sessionId = ++nextPlayerSession;
     void libraryClient
@@ -191,13 +249,13 @@ function NativeMpvPlayer({ game, selected, active, onSurfaceHeight }: { game: Ga
         const visibleArea = Math.max(0, visibleRight - visibleLeft) * Math.max(0, visibleBottom - visibleTop);
         const visibleRatio = visibleArea / Math.max(1, rect.width * rect.height);
         void libraryClient.mpvViewport({
-          x: Math.round(rect.left * scale),
-          y: Math.round(rect.top * scale),
-          width: Math.round(rect.width * scale),
-          height: Math.round(rect.height * scale),
+          x: Math.round((rect.left + navigationInset) * scale),
+          y: Math.round((rect.top + navigationVerticalInset) * scale),
+          width: Math.round(Math.max(0, rect.width - navigationInset * 2) * scale),
+          height: Math.round(Math.max(0, rect.height - navigationVerticalInset * 2) * scale),
           visible: active && (fullscreen || visibleRatio >= 0.18),
-          cornerRadius: fullscreen ? 0 : Math.round(22 * scale),
-          clipTop: fullscreen ? 0 : Math.round(Math.max(0, 69 - rect.top) * scale),
+          cornerRadius: fullscreen || navigationInset ? 0 : Math.round(22 * scale),
+          clipTop: fullscreen ? 0 : Math.round(Math.max(0, 69 - rect.top - navigationVerticalInset) * scale),
         }).catch(() => undefined);
       });
     };
@@ -220,7 +278,7 @@ function NativeMpvPlayer({ game, selected, active, onSurfaceHeight }: { game: Ga
       window.visualViewport?.removeEventListener("scroll", update);
       void libraryClient.mpvViewport({ x: 0, y: 0, width: 0, height: 0, visible: false, cornerRadius: 0, clipTop: 0 }).catch(() => undefined);
     };
-  }, [active, availability?.available, current?.sessionId, fullscreen, onSurfaceHeight, playerReady]);
+  }, [active, availability?.available, current?.sessionId, fullscreen, navigationInset, navigationVerticalInset, onSurfaceHeight, playerReady]);
 
   const updateSnapshot = (operation: Promise<MpvSnapshot>) => {
     const sessionId = current?.sessionId;
@@ -235,6 +293,51 @@ function NativeMpvPlayer({ game, selected, active, onSurfaceHeight }: { game: Ga
   };
 
   const selectedAudioIds = snapshot?.audioTracks.filter((track) => track.selected).map((track) => track.id) ?? [];
+  const activeSeekDraft = seekDraft && seekDraft.sessionId === snapshot?.sessionId ? seekDraft.value : null;
+  const activeVolumeDraft = volumeDraft && volumeDraft.sessionId === snapshot?.sessionId ? volumeDraft.value : null;
+  const selectedAudioLabel = snapshot?.audioTracks.length
+    ? selectedAudioIds.length === 1
+      ? snapshot.audioTracks.find((track) => track.id === selectedAudioIds[0])?.title
+        ?? snapshot.audioTracks.find((track) => track.id === selectedAudioIds[0])?.language
+        ?? "1 track"
+      : `${selectedAudioIds.length} tracks`
+    : "Audio";
+
+  const commitSeek = (value: number) => {
+    if (!snapshot) return;
+    const sessionId = snapshot.sessionId;
+    const requestId = ++seekRequestRef.current;
+    setSeekDraft({ sessionId, value });
+    void libraryClient
+      .mpvSeek(sessionId, value)
+      .then((result) => {
+        if (result.sessionId === sessionId) {
+          setPlayback((currentPlayback) => currentPlayback?.sessionId === sessionId ? { ...currentPlayback, snapshot: result, error: null } : currentPlayback);
+        }
+      })
+      .catch((cause) => setPlayback((currentPlayback) => currentPlayback?.sessionId === sessionId ? { ...currentPlayback, error: cause instanceof Error ? cause.message : String(cause) } : currentPlayback))
+      .finally(() => {
+        if (seekRequestRef.current === requestId) setSeekDraft((draft) => draft?.sessionId === sessionId ? null : draft);
+      });
+  };
+
+  const commitVolume = (value: number) => {
+    if (!snapshot) return;
+    const sessionId = snapshot.sessionId;
+    const requestId = ++volumeRequestRef.current;
+    setVolumeDraft({ sessionId, value });
+    void libraryClient
+      .mpvVolume(sessionId, value)
+      .then((result) => {
+        if (result.sessionId === sessionId) {
+          setPlayback((currentPlayback) => currentPlayback?.sessionId === sessionId ? { ...currentPlayback, snapshot: result, error: null } : currentPlayback);
+        }
+      })
+      .catch((cause) => setPlayback((currentPlayback) => currentPlayback?.sessionId === sessionId ? { ...currentPlayback, error: cause instanceof Error ? cause.message : String(cause) } : currentPlayback))
+      .finally(() => {
+        if (volumeRequestRef.current === requestId) setVolumeDraft((draft) => draft?.sessionId === sessionId ? null : draft);
+      });
+  };
 
   const toggleAudioTrack = (trackId: number, selected: boolean) => {
     if (!snapshot) return;
@@ -256,9 +359,9 @@ function NativeMpvPlayer({ game, selected, active, onSurfaceHeight }: { game: Ga
   return (
     <div>
       <div ref={surfaceRef} data-player-surface className={cn(
-        "relative aspect-video overflow-hidden rounded-[1.35rem] border border-white/10 bg-[#050506] shadow-[0_24px_80px_rgba(0,0,0,.35)]",
-        fullscreen && "fixed bottom-20 left-0 right-0 top-0 z-[100] aspect-auto rounded-none border-0 shadow-none",
-      )}>
+        "group/player relative aspect-video overflow-hidden rounded-[1.35rem] border border-white/10 bg-[#050506] shadow-[0_24px_80px_rgba(0,0,0,.35)]",
+        fullscreen && "fixed left-0 right-0 top-0 z-[100] aspect-auto rounded-none border-0 shadow-none",
+      )} style={fullscreen ? { bottom: controlsHeight + (audioMenuOpen ? 320 : 0) } : undefined}>
         {!availability ? (
           <div className="absolute inset-0 grid place-items-center"><Spinner className="size-6" /></div>
         ) : !availability.available && fallbackUrl ? (
@@ -278,76 +381,122 @@ function NativeMpvPlayer({ game, selected, active, onSurfaceHeight }: { game: Ga
         ) : !current?.snapshot ? (
           <div className="absolute inset-0 grid place-items-center"><div className="flex items-center gap-3 text-sm text-white/60"><Spinner /> Starting libmpv …</div></div>
         ) : null}
+        {navigationInset ? (
+          <>
+            <Button
+              size="icon"
+              variant="ghost"
+              aria-label="Previous clip"
+              title={previousClip ? `Previous: ${previousClip.fileName}` : "No previous clip"}
+              disabled={!previousClip}
+              onClick={onPrevious}
+              className="absolute left-0 top-1/2 z-[2] size-9 -translate-y-1/2 rounded-none border-y border-r border-white/10 bg-black/75 opacity-0 backdrop-blur-sm transition-opacity group-hover/player:opacity-100 focus-visible:opacity-100 disabled:opacity-20"
+            >
+              <ChevronLeft className="size-5" />
+            </Button>
+            <Button
+              size="icon"
+              variant="ghost"
+              aria-label="Next clip"
+              title={nextAvailable ? "Next clip" : "No next clip"}
+              disabled={!nextAvailable || navigationPending}
+              onClick={onNext}
+              className="absolute right-0 top-1/2 z-[2] size-9 -translate-y-1/2 rounded-none border-y border-l border-white/10 bg-black/75 opacity-0 backdrop-blur-sm transition-opacity group-hover/player:opacity-100 focus-visible:opacity-100 disabled:opacity-20"
+            >
+              {navigationPending ? <Spinner className="size-4" /> : <ChevronRight className="size-5" />}
+            </Button>
+          </>
+        ) : null}
       </div>
 
       {availability?.available ? (
-        <div className={cn(
-          "mt-3 flex min-h-16 flex-col gap-3 rounded-2xl border border-white/[.08] bg-white/[.025] p-3 sm:flex-row sm:items-center",
-          fullscreen && "fixed inset-x-0 bottom-0 z-[101] m-0 min-h-20 rounded-none border-x-0 border-b-0 bg-black px-5",
+        <div ref={controlsRef} className={cn(
+          "mt-3 flex min-h-24 flex-col gap-3 rounded-2xl border border-white/[.08] bg-white/[.025] p-3",
+          fullscreen && "fixed inset-x-0 bottom-0 z-[101] m-0 rounded-none border-x-0 border-b-0 bg-black px-5",
         )}>
-          {snapshot ? <>
-          <Button
-            size="icon"
-            variant="secondary"
-            aria-label={snapshot.paused ? "Play" : "Pause"}
-            onClick={() => updateSnapshot(libraryClient.mpvPaused(snapshot.sessionId, !snapshot.paused))}
-          >
-            {snapshot.paused ? <Play className="size-4" /> : <Pause className="size-4" />}
-          </Button>
-          <span className="w-24 shrink-0 text-center text-xs tabular-nums text-muted-foreground">
-            {formatDuration(snapshot.positionSeconds)} / {formatDuration(snapshot.durationSeconds)}
-          </span>
-          <input
-            aria-label="Playback position"
-            type="range"
-            min={0}
-            max={Math.max(snapshot.durationSeconds ?? 0, 1)}
-            step={0.1}
-            value={Math.min(snapshot.positionSeconds, snapshot.durationSeconds ?? snapshot.positionSeconds)}
-            onChange={(event) => updateSnapshot(libraryClient.mpvSeek(snapshot.sessionId, Number(event.target.value)))}
-            className="h-2 min-w-0 flex-1 cursor-pointer accent-white"
-          />
-          <Button
-            size="icon"
-            variant="ghost"
-            aria-label={snapshot.muted ? "Unmute" : "Mute"}
-            onClick={() => updateSnapshot(libraryClient.mpvMuted(snapshot.sessionId, !snapshot.muted))}
-          >
-            {snapshot.muted ? <VolumeX className="size-4" /> : <Volume2 className="size-4" />}
-          </Button>
-          <input
-            aria-label="Volume"
-            type="range"
-            min={0}
-            max={100}
-            value={snapshot.volume}
-            onChange={(event) => updateSnapshot(libraryClient.mpvVolume(snapshot.sessionId, Number(event.target.value)))}
-            className="h-2 w-24 cursor-pointer accent-white"
-          />
-          {snapshot.audioTracks.length > 1 ? (
-            <div className="flex min-w-0 max-w-[min(30rem,38vw)] items-center gap-2" role="group" aria-label="Included audio tracks">
-              <Headphones className="size-4 shrink-0 text-muted-foreground" />
-              <div className="flex min-w-0 gap-1.5 overflow-x-auto pb-0.5">
-                {snapshot.audioTracks.map((track, index) => (
-                  <label key={track.id} className="flex shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border border-white/[.09] bg-white/[.035] px-2.5 py-2 text-xs text-white/75 transition hover:bg-white/[.07]">
-                    <input
-                      type="checkbox"
-                      checked={track.selected}
-                      disabled={track.selected && selectedAudioIds.length === 1}
-                      onChange={(event) => toggleAudioTrack(track.id, event.target.checked)}
-                      className="size-3.5 accent-white"
-                    />
-                    <span>{track.title ?? track.language ?? `Audio ${index + 1}`}</span>
-                    {track.codec ? <span className="text-[10px] uppercase text-muted-foreground">{track.codec}</span> : null}
-                  </label>
-                ))}
+          {snapshot ? (
+            <>
+              <Slider
+                aria-label="Playback position"
+                min={0}
+                max={Math.max(snapshot.durationSeconds ?? 0, 1)}
+                step={0.1}
+                value={[Math.min(activeSeekDraft ?? snapshot.positionSeconds, snapshot.durationSeconds ?? activeSeekDraft ?? snapshot.positionSeconds)]}
+                onValueChange={([value]) => setSeekDraft({ sessionId: snapshot.sessionId, value })}
+                onValueCommit={([value]) => commitSeek(value)}
+                className="h-4"
+              />
+              <div className="flex min-w-0 flex-wrap items-center gap-2 sm:flex-nowrap">
+                <Button
+                  size="icon"
+                  variant="secondary"
+                  aria-label={snapshot.paused ? "Play" : "Pause"}
+                  onClick={() => updateSnapshot(libraryClient.mpvPaused(snapshot.sessionId, !snapshot.paused))}
+                >
+                  {snapshot.paused ? <Play className="size-4" /> : <Pause className="size-4" />}
+                </Button>
+                <span className="w-28 shrink-0 text-center text-xs tabular-nums text-muted-foreground">
+                  {formatDuration(activeSeekDraft ?? snapshot.positionSeconds)} / {formatDuration(snapshot.durationSeconds)}
+                </span>
+                <div className="min-w-2 flex-1" />
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  aria-label={snapshot.muted ? "Unmute" : "Mute"}
+                  onClick={() => updateSnapshot(libraryClient.mpvMuted(snapshot.sessionId, !snapshot.muted))}
+                >
+                  {snapshot.muted ? <VolumeX className="size-4" /> : <Volume2 className="size-4" />}
+                </Button>
+                <Slider
+                  aria-label="Volume"
+                  min={0}
+                  max={100}
+                  step={1}
+                  value={[activeVolumeDraft ?? snapshot.volume]}
+                  onValueChange={([value]) => setVolumeDraft({ sessionId: snapshot.sessionId, value })}
+                  onValueCommit={([value]) => commitVolume(value)}
+                  className="w-24 shrink-0"
+                />
+                {snapshot.audioTracks.length > 1 ? (
+                  <DropdownMenu open={audioMenuOpen} onOpenChange={setAudioMenuOpen} modal={false}>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="sm" className="max-w-52 min-w-0" aria-label="Choose included audio tracks">
+                        <Headphones className="size-4 shrink-0" />
+                        <span className="truncate">{selectedAudioLabel}</span>
+                        <ChevronDown className="size-3.5 shrink-0 opacity-60" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent
+                      align="end"
+                      side={fullscreen ? "top" : "bottom"}
+                      sideOffset={10}
+                      collisionPadding={12}
+                      avoidCollisions={fullscreen}
+                      className="max-h-72 w-72 overflow-y-auto"
+                    >
+                      <DropdownMenuLabel>Included audio tracks</DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      {snapshot.audioTracks.map((track, index) => (
+                        <DropdownMenuCheckboxItem
+                          key={track.id}
+                          checked={track.selected}
+                          disabled={track.selected && selectedAudioIds.length === 1}
+                          onCheckedChange={(checked) => toggleAudioTrack(track.id, checked === true)}
+                          onSelect={(event) => event.preventDefault()}
+                        >
+                          <span className="min-w-0 flex-1 truncate">{track.title ?? track.language ?? `Audio ${index + 1}`}</span>
+                          {track.codec ? <span className="shrink-0 text-[10px] uppercase text-muted-foreground">{track.codec}</span> : null}
+                        </DropdownMenuCheckboxItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                ) : null}
+                <Button size="icon" variant="ghost" aria-label={fullscreen ? "Exit fullscreen" : "Enter fullscreen"} title={fullscreen ? "Exit fullscreen (Esc)" : "Fullscreen (F)"} onClick={toggleFullscreen}>
+                  {fullscreen ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
+                </Button>
               </div>
-            </div>
-          ) : null}
-          <Button size="icon" variant="ghost" aria-label={fullscreen ? "Exit fullscreen" : "Enter fullscreen"} title={fullscreen ? "Exit fullscreen (Esc)" : "Fullscreen (F)"} onClick={toggleFullscreen}>
-            {fullscreen ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
-          </Button>
-          </> : <div className="flex w-full items-center justify-center gap-2 text-xs text-muted-foreground"><Spinner /> Loading player …</div>}
+            </>
+          ) : <div className="flex w-full flex-1 items-center justify-center gap-2 text-xs text-muted-foreground"><Spinner /> Loading player …</div>}
         </div>
       ) : null}
     </div>
