@@ -29,6 +29,7 @@ export interface MpvSnapshot {
   positionSeconds: number;
   durationSeconds: number | null;
   paused: boolean;
+  seeking: boolean;
   volume: number;
   muted: boolean;
   audioTracks: MpvAudioTrack[];

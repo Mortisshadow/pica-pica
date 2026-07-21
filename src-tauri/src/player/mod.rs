@@ -47,6 +47,7 @@ pub struct MpvSnapshot {
     pub position_seconds: f64,
     pub duration_seconds: Option<f64>,
     pub paused: bool,
+    pub seeking: bool,
     pub volume: f64,
     pub muted: bool,
     pub audio_tracks: Vec<MpvAudioTrack>,
@@ -105,6 +106,12 @@ impl MpvService {
 
     pub fn seek(&self, _session_id: u64, _seconds: f64) -> AppResult<MpvSnapshot> {
         self.snapshot()
+    }
+
+    pub fn preview_seek(&self, _session_id: u64, _seconds: f64) -> AppResult<()> {
+        Err(AppError::Task(
+            "Embedded libmpv is not available on this platform yet.".to_owned(),
+        ))
     }
 
     pub fn set_volume(&self, _session_id: u64, _volume: f64) -> AppResult<MpvSnapshot> {

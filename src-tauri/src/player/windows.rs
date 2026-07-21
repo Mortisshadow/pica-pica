@@ -289,10 +289,24 @@ impl Player {
             .ok_or_else(|| self.api.error(code))
     }
 
+    fn seek(&self, seconds: f64, exact: bool) -> Result<(), String> {
+        let seconds = seconds.max(0.0).to_string();
+        self.command(&[
+            "seek",
+            &seconds,
+            if exact {
+                "absolute+exact"
+            } else {
+                "absolute+keyframes"
+            },
+        ])
+    }
+
     fn snapshot(&mut self) -> MpvSnapshot {
         let position_seconds = self.get_double("time-pos").unwrap_or_default();
         let duration_seconds = self.get_double("duration").filter(|value| *value > 0.0);
         let paused = self.get_flag("pause").unwrap_or(false);
+        let seeking = self.get_flag("seeking").unwrap_or(false);
         let idle = self.get_flag("core-idle").unwrap_or(true);
         if duration_seconds.is_some() {
             self.status = if paused { "paused" } else { "playing" }.to_owned();
@@ -332,6 +346,7 @@ impl Player {
             position_seconds,
             duration_seconds,
             paused,
+            seeking,
             volume: self.get_double("volume").unwrap_or(100.0),
             muted: self.get_flag("mute").unwrap_or(false),
             audio_tracks,
@@ -340,9 +355,10 @@ impl Player {
     }
 
     fn select_audio_tracks(&mut self, track_ids: &[i64]) -> Result<(), String> {
+        let position = self.get_double("time-pos");
         if track_ids.len() == 1 {
-            self.set_string("lavfi-complex", "")?;
             self.set_string("aid", &track_ids[0].to_string())?;
+            self.set_string("lavfi-complex", "")?;
         } else {
             let inputs = track_ids
                 .iter()
@@ -353,6 +369,9 @@ impl Player {
                 track_ids.len()
             );
             self.set_string("lavfi-complex", &filter)?;
+        }
+        if let Some(position) = position {
+            self.seek(position, true)?;
         }
         self.mixed_audio_tracks = track_ids.to_vec();
         Ok(())
@@ -534,9 +553,21 @@ impl MpvService {
     }
 
     pub fn seek(&self, session_id: u64, seconds: f64) -> AppResult<MpvSnapshot> {
-        self.with_session(session_id, |player| {
-            player.set_double("time-pos", seconds.max(0.0))
-        })
+        self.with_session(session_id, |player| player.seek(seconds, true))
+    }
+
+    pub fn preview_seek(&self, session_id: u64, seconds: f64) -> AppResult<()> {
+        let mut guard = self
+            .player
+            .lock()
+            .map_err(|_| AppError::Task("libmpv player lock failed.".to_owned()))?;
+        let player = guard
+            .as_mut()
+            .ok_or_else(|| AppError::Task("libmpv is not active.".to_owned()))?;
+        if player.session_id != session_id {
+            return Err(AppError::InvalidInput("Stale player session.".to_owned()));
+        }
+        player.seek(seconds, false).map_err(AppError::Task)
     }
 
     pub fn set_volume(&self, session_id: u64, volume: f64) -> AppResult<MpvSnapshot> {

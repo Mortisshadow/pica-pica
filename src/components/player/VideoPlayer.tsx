@@ -14,6 +14,13 @@ import type { MpvAvailability, MpvSnapshot } from "@/types/player";
 
 let nextPlayerSession = 0;
 
+type SeekDraft = {
+  sessionId: number;
+  value: number;
+  phase: "dragging" | "queued" | "settling";
+  operationId: number;
+};
+
 interface VideoPlayerProps {
   game: Game;
   clips: Clip[];
@@ -128,15 +135,27 @@ interface NativeMpvPlayerProps {
 function NativeMpvPlayer({ game, selected, active, previousClip, nextAvailable, navigationPending, onPrevious, onNext, onSurfaceHeight }: NativeMpvPlayerProps) {
   const surfaceRef = useRef<HTMLDivElement>(null);
   const controlsRef = useRef<HTMLDivElement>(null);
-  const seekRequestRef = useRef(0);
+  const snapshotEpochRef = useRef(0);
+  const nextOperationIdRef = useRef(0);
+  const latestSeekOperationRef = useRef(0);
+  const latestAudioOperationRef = useRef(0);
   const volumeRequestRef = useRef(0);
+  const previewSeekTimerRef = useRef<number | null>(null);
+  const seekSettleTimerRef = useRef<number | null>(null);
+  const pendingPreviewSeekRef = useRef<{ sessionId: number; value: number; operationId: number } | null>(null);
+  const pendingExactSeekRef = useRef<{ sessionId: number; value: number; operationId: number } | null>(null);
+  const seekCommandInFlightRef = useRef(false);
+  const pendingAudioSelectionRef = useRef<{ sessionId: number; trackIds: number[]; position: number; operationId: number } | null>(null);
+  const audioSelectionDraftRef = useRef<{ sessionId: number; trackIds: number[]; operationId: number } | null>(null);
+  const audioCommandInFlightRef = useRef(false);
   const [availability, setAvailability] = useState<MpvAvailability | null>(null);
   const [playback, setPlayback] = useState<{ clipId: string; sessionId: number; snapshot: MpvSnapshot | null; error: string | null } | null>(null);
   const [fullscreen, setFullscreen] = useState(false);
   const [audioMenuOpen, setAudioMenuOpen] = useState(false);
   const [controlsHeight, setControlsHeight] = useState(96);
-  const [seekDraft, setSeekDraft] = useState<{ sessionId: number; value: number } | null>(null);
+  const [seekDraft, setSeekDraft] = useState<SeekDraft | null>(null);
   const [volumeDraft, setVolumeDraft] = useState<{ sessionId: number; value: number } | null>(null);
+  const [audioSelectionDraft, setAudioSelectionDraft] = useState<{ sessionId: number; trackIds: number[]; operationId: number } | null>(null);
   const current = playback?.clipId === selected?.id ? playback : null;
   const snapshot = current?.snapshot ?? null;
   const playerReady = Boolean(snapshot);
@@ -177,8 +196,18 @@ function NativeMpvPlayer({ game, selected, active, previousClip, nextAvailable, 
 
   useEffect(() => {
     if (!selected || !availability?.available) return;
-    seekRequestRef.current += 1;
+    snapshotEpochRef.current += 1;
     volumeRequestRef.current += 1;
+    if (previewSeekTimerRef.current !== null) window.clearTimeout(previewSeekTimerRef.current);
+    if (seekSettleTimerRef.current !== null) window.clearTimeout(seekSettleTimerRef.current);
+    previewSeekTimerRef.current = null;
+    seekSettleTimerRef.current = null;
+    pendingPreviewSeekRef.current = null;
+    pendingExactSeekRef.current = null;
+    pendingAudioSelectionRef.current = null;
+    audioSelectionDraftRef.current = null;
+    latestSeekOperationRef.current = 0;
+    latestAudioOperationRef.current = 0;
     let mounted = true;
     const sessionId = ++nextPlayerSession;
     void libraryClient
@@ -191,24 +220,33 @@ function NativeMpvPlayer({ game, selected, active, previousClip, nextAvailable, 
       });
     return () => {
       mounted = false;
+      if (previewSeekTimerRef.current !== null) window.clearTimeout(previewSeekTimerRef.current);
+      if (seekSettleTimerRef.current !== null) window.clearTimeout(seekSettleTimerRef.current);
+      previewSeekTimerRef.current = null;
+      seekSettleTimerRef.current = null;
+      pendingPreviewSeekRef.current = null;
+      pendingExactSeekRef.current = null;
+      pendingAudioSelectionRef.current = null;
+      audioSelectionDraftRef.current = null;
       void libraryClient.mpvStop(sessionId).catch(() => undefined);
     };
   }, [availability?.available, selected]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || audioMenuOpen) return;
       if (event.key === "Escape" && fullscreen) {
         void libraryClient.setFullscreen(false).then(() => setFullscreen(false));
       } else if (event.key.toLocaleLowerCase() === "f" && !event.ctrlKey && !event.metaKey && !event.altKey) {
         const target = event.target as HTMLElement | null;
-        if (target?.matches("input, textarea, select")) return;
+        if (target?.matches("input, textarea, select, [contenteditable='true']")) return;
         const next = !fullscreen;
         void libraryClient.setFullscreen(next).then(() => setFullscreen(next));
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [fullscreen]);
+  }, [audioMenuOpen, fullscreen]);
 
   useEffect(() => () => {
     if (fullscreen) void libraryClient.setFullscreen(false);
@@ -217,19 +255,29 @@ function NativeMpvPlayer({ game, selected, active, previousClip, nextAvailable, 
   useEffect(() => {
     if (!current?.sessionId || !playerReady) return;
     let mounted = true;
-    const poll = window.setInterval(() => {
+    let pollTimer: number | null = null;
+    const poll = () => {
+      const snapshotEpoch = snapshotEpochRef.current;
       void libraryClient
         .mpvSnapshot()
         .then((result) => {
-          if (mounted && result.sessionId === current.sessionId) {
+          if (mounted && snapshotEpoch === snapshotEpochRef.current && result.sessionId === current.sessionId) {
             setPlayback((value) => value?.sessionId === current.sessionId ? { ...value, snapshot: result } : value);
+            setSeekDraft((draft) => {
+              if (!draft || draft.phase !== "settling" || draft.sessionId !== result.sessionId || result.seeking) return draft;
+              return null;
+            });
           }
         })
-        .catch(() => undefined);
-    }, 350);
+        .catch(() => undefined)
+        .finally(() => {
+          if (mounted) pollTimer = window.setTimeout(poll, 350);
+        });
+    };
+    pollTimer = window.setTimeout(poll, 350);
     return () => {
       mounted = false;
-      window.clearInterval(poll);
+      if (pollTimer !== null) window.clearTimeout(pollTimer);
     };
   }, [current?.sessionId, playerReady]);
 
@@ -283,16 +331,24 @@ function NativeMpvPlayer({ game, selected, active, previousClip, nextAvailable, 
   const updateSnapshot = (operation: Promise<MpvSnapshot>) => {
     const sessionId = current?.sessionId;
     if (!sessionId) return;
+    snapshotEpochRef.current += 1;
     void operation
       .then((result) => {
+        snapshotEpochRef.current += 1;
         if (result.sessionId === sessionId) {
           setPlayback((value) => value?.sessionId === sessionId ? { ...value, snapshot: result, error: null } : value);
         }
       })
-      .catch((cause) => setPlayback((value) => value?.sessionId === sessionId ? { ...value, error: cause instanceof Error ? cause.message : String(cause) } : value));
+      .catch((cause) => {
+        snapshotEpochRef.current += 1;
+        setPlayback((value) => value?.sessionId === sessionId ? { ...value, error: cause instanceof Error ? cause.message : String(cause) } : value);
+      });
   };
 
-  const selectedAudioIds = snapshot?.audioTracks.filter((track) => track.selected).map((track) => track.id) ?? [];
+  const snapshotAudioIds = snapshot?.audioTracks.filter((track) => track.selected).map((track) => track.id) ?? [];
+  const selectedAudioIds = audioSelectionDraft && audioSelectionDraft.sessionId === snapshot?.sessionId
+    ? audioSelectionDraft.trackIds
+    : snapshotAudioIds;
   const activeSeekDraft = seekDraft && seekDraft.sessionId === snapshot?.sessionId ? seekDraft.value : null;
   const activeVolumeDraft = volumeDraft && volumeDraft.sessionId === snapshot?.sessionId ? volumeDraft.value : null;
   const selectedAudioLabel = snapshot?.audioTracks.length
@@ -303,49 +359,195 @@ function NativeMpvPlayer({ game, selected, active, previousClip, nextAvailable, 
       : `${selectedAudioIds.length} tracks`
     : "Audio";
 
+  const holdSeekPosition = (sessionId: number, value: number, phase: SeekDraft["phase"], operationId: number) => {
+    setSeekDraft({ sessionId, value, phase, operationId });
+    if (seekSettleTimerRef.current !== null) window.clearTimeout(seekSettleTimerRef.current);
+    seekSettleTimerRef.current = window.setTimeout(() => {
+      setSeekDraft((draft) => draft?.sessionId === sessionId && draft.operationId === operationId ? null : draft);
+      seekSettleTimerRef.current = null;
+    }, 5_000);
+  };
+
+  const markSeekSettling = (sessionId: number, operationId: number) => {
+    setSeekDraft((draft) => draft?.sessionId === sessionId
+      && draft.phase === "queued"
+      && draft.operationId === operationId
+      ? { ...draft, phase: "settling" }
+      : draft);
+  };
+
+  const reportPlayerError = (sessionId: number, cause: unknown) => {
+    setPlayback((currentPlayback) => currentPlayback?.sessionId === sessionId
+      ? { ...currentPlayback, error: cause instanceof Error ? cause.message : String(cause) }
+      : currentPlayback);
+  };
+
+  const schedulePreviewSeek = () => {
+    if (previewSeekTimerRef.current !== null || pendingExactSeekRef.current || seekCommandInFlightRef.current) return;
+    previewSeekTimerRef.current = window.setTimeout(() => {
+      previewSeekTimerRef.current = null;
+      drainSeekQueue();
+    }, 75);
+  };
+
+  const drainSeekQueue = () => {
+    if (seekCommandInFlightRef.current) return;
+    const exact = pendingExactSeekRef.current;
+    if (exact) {
+      pendingExactSeekRef.current = null;
+      pendingPreviewSeekRef.current = null;
+      seekCommandInFlightRef.current = true;
+      snapshotEpochRef.current += 1;
+      void libraryClient
+        .mpvSeek(exact.sessionId, exact.value)
+        .then(() => {
+          snapshotEpochRef.current += 1;
+          if (latestSeekOperationRef.current !== exact.operationId) return;
+          setPlayback((currentPlayback) => currentPlayback?.sessionId === exact.sessionId ? { ...currentPlayback, error: null } : currentPlayback);
+          markSeekSettling(exact.sessionId, exact.operationId);
+        })
+        .catch((cause) => {
+          snapshotEpochRef.current += 1;
+          if (latestSeekOperationRef.current !== exact.operationId) return;
+          reportPlayerError(exact.sessionId, cause);
+          setSeekDraft((draft) => draft?.sessionId === exact.sessionId
+            && draft.phase === "queued"
+            && draft.operationId === exact.operationId
+            ? null
+            : draft);
+        })
+        .finally(() => {
+          seekCommandInFlightRef.current = false;
+          if (pendingExactSeekRef.current) drainSeekQueue();
+          else if (pendingPreviewSeekRef.current) schedulePreviewSeek();
+        });
+      return;
+    }
+
+    const preview = pendingPreviewSeekRef.current;
+    if (!preview) return;
+    pendingPreviewSeekRef.current = null;
+    seekCommandInFlightRef.current = true;
+    snapshotEpochRef.current += 1;
+    void libraryClient
+      .mpvPreviewSeek(preview.sessionId, preview.value)
+      .then(() => {
+        snapshotEpochRef.current += 1;
+      })
+      .catch((cause) => {
+        snapshotEpochRef.current += 1;
+        if (latestSeekOperationRef.current !== preview.operationId) return;
+        reportPlayerError(preview.sessionId, cause);
+        setSeekDraft((draft) => draft?.sessionId === preview.sessionId && draft.operationId === preview.operationId ? null : draft);
+      })
+      .finally(() => {
+        seekCommandInFlightRef.current = false;
+        if (pendingExactSeekRef.current) drainSeekQueue();
+        else if (pendingPreviewSeekRef.current) schedulePreviewSeek();
+      });
+  };
+
+  const previewSeek = (value: number) => {
+    if (!snapshot) return;
+    const sessionId = snapshot.sessionId;
+    const operationId = ++nextOperationIdRef.current;
+    latestSeekOperationRef.current = operationId;
+    snapshotEpochRef.current += 1;
+    holdSeekPosition(sessionId, value, "dragging", operationId);
+    pendingPreviewSeekRef.current = { sessionId, value, operationId };
+    schedulePreviewSeek();
+  };
+
   const commitSeek = (value: number) => {
     if (!snapshot) return;
     const sessionId = snapshot.sessionId;
-    const requestId = ++seekRequestRef.current;
-    setSeekDraft({ sessionId, value });
-    void libraryClient
-      .mpvSeek(sessionId, value)
-      .then((result) => {
-        if (result.sessionId === sessionId) {
-          setPlayback((currentPlayback) => currentPlayback?.sessionId === sessionId ? { ...currentPlayback, snapshot: result, error: null } : currentPlayback);
-        }
-      })
-      .catch((cause) => setPlayback((currentPlayback) => currentPlayback?.sessionId === sessionId ? { ...currentPlayback, error: cause instanceof Error ? cause.message : String(cause) } : currentPlayback))
-      .finally(() => {
-        if (seekRequestRef.current === requestId) setSeekDraft((draft) => draft?.sessionId === sessionId ? null : draft);
-      });
+    const operationId = ++nextOperationIdRef.current;
+    latestSeekOperationRef.current = operationId;
+    if (previewSeekTimerRef.current !== null) window.clearTimeout(previewSeekTimerRef.current);
+    previewSeekTimerRef.current = null;
+    pendingPreviewSeekRef.current = null;
+    pendingExactSeekRef.current = { sessionId, value, operationId };
+    snapshotEpochRef.current += 1;
+    holdSeekPosition(sessionId, value, "queued", operationId);
+    drainSeekQueue();
   };
 
   const commitVolume = (value: number) => {
     if (!snapshot) return;
     const sessionId = snapshot.sessionId;
     const requestId = ++volumeRequestRef.current;
+    snapshotEpochRef.current += 1;
     setVolumeDraft({ sessionId, value });
     void libraryClient
       .mpvVolume(sessionId, value)
       .then((result) => {
+        snapshotEpochRef.current += 1;
         if (result.sessionId === sessionId) {
           setPlayback((currentPlayback) => currentPlayback?.sessionId === sessionId ? { ...currentPlayback, snapshot: result, error: null } : currentPlayback);
         }
       })
-      .catch((cause) => setPlayback((currentPlayback) => currentPlayback?.sessionId === sessionId ? { ...currentPlayback, error: cause instanceof Error ? cause.message : String(cause) } : currentPlayback))
+      .catch((cause) => {
+        snapshotEpochRef.current += 1;
+        setPlayback((currentPlayback) => currentPlayback?.sessionId === sessionId ? { ...currentPlayback, error: cause instanceof Error ? cause.message : String(cause) } : currentPlayback);
+      })
       .finally(() => {
         if (volumeRequestRef.current === requestId) setVolumeDraft((draft) => draft?.sessionId === sessionId ? null : draft);
       });
   };
 
+  const drainAudioSelection = () => {
+    if (audioCommandInFlightRef.current) return;
+    const pending = pendingAudioSelectionRef.current;
+    if (!pending) return;
+    pendingAudioSelectionRef.current = null;
+    audioCommandInFlightRef.current = true;
+    snapshotEpochRef.current += 1;
+    void libraryClient
+      .mpvAudioTracks(pending.sessionId, pending.trackIds)
+      .then((result) => {
+        snapshotEpochRef.current += 1;
+        if (result.sessionId !== pending.sessionId || latestAudioOperationRef.current !== pending.operationId) return;
+        setPlayback((currentPlayback) => {
+          if (currentPlayback?.sessionId !== pending.sessionId || !currentPlayback.snapshot) return currentPlayback;
+          return { ...currentPlayback, snapshot: { ...currentPlayback.snapshot, audioTracks: result.audioTracks }, error: null };
+        });
+        markSeekSettling(pending.sessionId, pending.operationId);
+      })
+      .catch((cause) => {
+        snapshotEpochRef.current += 1;
+        if (latestAudioOperationRef.current !== pending.operationId) return;
+        reportPlayerError(pending.sessionId, cause);
+        setSeekDraft((draft) => draft?.sessionId === pending.sessionId && draft.operationId === pending.operationId ? null : draft);
+      })
+      .finally(() => {
+        audioCommandInFlightRef.current = false;
+        if (pendingAudioSelectionRef.current) {
+          drainAudioSelection();
+        } else {
+          if (audioSelectionDraftRef.current?.operationId === pending.operationId) audioSelectionDraftRef.current = null;
+          setAudioSelectionDraft((draft) => draft?.operationId === pending.operationId ? null : draft);
+        }
+      });
+  };
+
   const toggleAudioTrack = (trackId: number, selected: boolean) => {
     if (!snapshot) return;
+    const currentIds = audioSelectionDraftRef.current?.sessionId === snapshot.sessionId
+      ? audioSelectionDraftRef.current.trackIds
+      : selectedAudioIds;
     const nextIds = selected
-      ? [...new Set([...selectedAudioIds, trackId])]
-      : selectedAudioIds.filter((id) => id !== trackId);
+      ? [...new Set([...currentIds, trackId])]
+      : currentIds.filter((id) => id !== trackId);
     if (!nextIds.length) return;
-    updateSnapshot(libraryClient.mpvAudioTracks(snapshot.sessionId, nextIds));
+    const position = activeSeekDraft ?? snapshot.positionSeconds;
+    const operationId = ++nextOperationIdRef.current;
+    latestAudioOperationRef.current = operationId;
+    audioSelectionDraftRef.current = { sessionId: snapshot.sessionId, trackIds: nextIds, operationId };
+    setAudioSelectionDraft({ sessionId: snapshot.sessionId, trackIds: nextIds, operationId });
+    pendingAudioSelectionRef.current = { sessionId: snapshot.sessionId, trackIds: nextIds, position, operationId };
+    snapshotEpochRef.current += 1;
+    holdSeekPosition(snapshot.sessionId, position, "queued", operationId);
+    drainAudioSelection();
   };
 
   const toggleFullscreen = () => {
@@ -422,7 +624,8 @@ function NativeMpvPlayer({ game, selected, active, previousClip, nextAvailable, 
                 max={Math.max(snapshot.durationSeconds ?? 0, 1)}
                 step={0.1}
                 value={[Math.min(activeSeekDraft ?? snapshot.positionSeconds, snapshot.durationSeconds ?? activeSeekDraft ?? snapshot.positionSeconds)]}
-                onValueChange={([value]) => setSeekDraft({ sessionId: snapshot.sessionId, value })}
+                aria-valuetext={`${formatDuration(activeSeekDraft ?? snapshot.positionSeconds)} of ${formatDuration(snapshot.durationSeconds)}`}
+                onValueChange={([value]) => previewSeek(value)}
                 onValueCommit={([value]) => commitSeek(value)}
                 className="h-4"
               />
@@ -476,18 +679,21 @@ function NativeMpvPlayer({ game, selected, active, previousClip, nextAvailable, 
                     >
                       <DropdownMenuLabel>Included audio tracks</DropdownMenuLabel>
                       <DropdownMenuSeparator />
-                      {snapshot.audioTracks.map((track, index) => (
-                        <DropdownMenuCheckboxItem
-                          key={track.id}
-                          checked={track.selected}
-                          disabled={track.selected && selectedAudioIds.length === 1}
-                          onCheckedChange={(checked) => toggleAudioTrack(track.id, checked === true)}
-                          onSelect={(event) => event.preventDefault()}
-                        >
-                          <span className="min-w-0 flex-1 truncate">{track.title ?? track.language ?? `Audio ${index + 1}`}</span>
-                          {track.codec ? <span className="shrink-0 text-[10px] uppercase text-muted-foreground">{track.codec}</span> : null}
-                        </DropdownMenuCheckboxItem>
-                      ))}
+                      {snapshot.audioTracks.map((track, index) => {
+                        const trackIncluded = selectedAudioIds.includes(track.id);
+                        return (
+                          <DropdownMenuCheckboxItem
+                            key={track.id}
+                            checked={trackIncluded}
+                            disabled={trackIncluded && selectedAudioIds.length === 1}
+                            onCheckedChange={(checked) => toggleAudioTrack(track.id, checked === true)}
+                            onSelect={(event) => event.preventDefault()}
+                          >
+                            <span className="min-w-0 flex-1 truncate">{track.title ?? track.language ?? `Audio ${index + 1}`}</span>
+                            {track.codec ? <span className="shrink-0 text-[10px] uppercase text-muted-foreground">{track.codec}</span> : null}
+                          </DropdownMenuCheckboxItem>
+                        );
+                      })}
                     </DropdownMenuContent>
                   </DropdownMenu>
                 ) : null}

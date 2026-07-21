@@ -155,6 +155,18 @@ pub fn mpv_seek(
 }
 
 #[tauri::command]
+pub fn mpv_preview_seek(
+    session_id: u64,
+    seconds: f64,
+    state: State<'_, AppState>,
+) -> AppResult<()> {
+    if !seconds.is_finite() {
+        return Err(AppError::InvalidInput("Invalid seek position.".to_owned()));
+    }
+    state.mpv.preview_seek(session_id, seconds)
+}
+
+#[tauri::command]
 pub fn mpv_set_volume(
     session_id: u64,
     volume: f64,

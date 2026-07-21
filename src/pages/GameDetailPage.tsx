@@ -28,44 +28,91 @@ export function GameDetailPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const heroRef = useRef<HTMLDivElement>(null);
+  const clipLoadGenerationRef = useRef(0);
+  const loadMorePromiseRef = useRef<Promise<Clip[]> | null>(null);
   const { scrollYProgress } = useScroll({ target: heroRef, offset: ["start start", "end start"] });
   const artworkOpacity = useTransform(scrollYProgress, [0, 0.72, 1], [1, 0.35, 0]);
   const artworkScale = useTransform(scrollYProgress, [0, 1], [1, 1.06]);
   const contentY = useTransform(scrollYProgress, [0, 1], [0, 42]);
 
   useEffect(() => {
-    let active = true;
-    if (!gameId) return () => { active = false; };
-    void libraryClient
+    const generation = ++clipLoadGenerationRef.current;
+    loadMorePromiseRef.current = null;
+    if (!gameId) return;
+    void Promise.resolve().then(() => {
+      if (clipLoadGenerationRef.current !== generation) return;
+      setClips([]);
+      setNextCursor(null);
+      setSelectedId(null);
+      setClipError(null);
+      setClipsLoading(true);
+    });
+    const request = libraryClient
       .gameClips(gameId, null, CLIP_PAGE_SIZE)
       .then((page) => {
-        if (!active) return;
+        if (clipLoadGenerationRef.current !== generation) return [];
         setClips(page.clips);
         setNextCursor(page.nextCursor);
         setClipError(null);
+        setSelectedId(null);
+        return [];
       })
-      .catch((cause) => active && setClipError(String(cause)))
-      .finally(() => active && setClipsLoading(false));
-    return () => { active = false; };
+      .catch((cause) => {
+        if (clipLoadGenerationRef.current === generation) setClipError(String(cause));
+        return [];
+      })
+      .finally(() => {
+        if (loadMorePromiseRef.current === request) loadMorePromiseRef.current = null;
+        if (clipLoadGenerationRef.current === generation) setClipsLoading(false);
+      });
+    loadMorePromiseRef.current = request;
+    return () => {
+      if (clipLoadGenerationRef.current === generation) clipLoadGenerationRef.current += 1;
+    };
   }, [gameId, library?.lastScannedAt]);
 
-  const selected: Clip | null = clips.find((clip) => clip.id === selectedId) ?? clips[0] ?? null;
+  const currentClips = gameId ? clips.filter((clip) => clip.gameId === gameId) : [];
+  const selected: Clip | null = currentClips.find((clip) => clip.id === selectedId) ?? currentClips[0] ?? null;
 
-  async function loadMore(): Promise<Clip[]> {
-    if (!gameId || !nextCursor || clipsLoading) return [];
+  function loadMore(): Promise<Clip[]> {
+    if (loadMorePromiseRef.current) return loadMorePromiseRef.current;
+    if (!gameId || !nextCursor || clipsLoading) return Promise.resolve([]);
+    const generation = clipLoadGenerationRef.current;
+    const cursor = nextCursor;
+    const knownIds = new Set(currentClips.map((clip) => clip.id));
     setClipsLoading(true);
     setClipError(null);
-    try {
-      const page = await libraryClient.gameClips(gameId, nextCursor, CLIP_PAGE_SIZE);
-      setClips((current) => [...current, ...page.clips]);
-      setNextCursor(page.nextCursor);
-      return page.clips;
-    } catch (cause) {
-      setClipError(String(cause));
-      return [];
-    } finally {
-      setClipsLoading(false);
-    }
+    const request = libraryClient
+      .gameClips(gameId, cursor, CLIP_PAGE_SIZE)
+      .then((page) => {
+        if (clipLoadGenerationRef.current !== generation) return [];
+        const appended = page.clips.filter((clip) => {
+          if (knownIds.has(clip.id)) return false;
+          knownIds.add(clip.id);
+          return true;
+        });
+        setClips((current) => {
+          const currentIds = new Set(current.map((clip) => clip.id));
+          const unique = appended.filter((clip) => {
+            if (currentIds.has(clip.id)) return false;
+            currentIds.add(clip.id);
+            return true;
+          });
+          return unique.length ? [...current, ...unique] : current;
+        });
+        setNextCursor(page.nextCursor);
+        return appended;
+      })
+      .catch((cause) => {
+        if (clipLoadGenerationRef.current === generation) setClipError(String(cause));
+        return [];
+      })
+      .finally(() => {
+        if (loadMorePromiseRef.current === request) loadMorePromiseRef.current = null;
+        if (clipLoadGenerationRef.current === generation) setClipsLoading(false);
+      });
+    loadMorePromiseRef.current = request;
+    return request;
   }
 
   if (!game) {
@@ -87,7 +134,7 @@ export function GameDetailPage() {
 
   return (
     <div className="relative -mt-[69px]">
-      <section ref={heroRef} className="relative isolate flex min-h-[78vh] items-end overflow-hidden pt-[69px]">
+      <section ref={heroRef} className="relative isolate flex min-h-[min(78vh,1000px)] items-end overflow-hidden pt-[69px]">
         <motion.div className="absolute inset-0" style={{ opacity: artworkOpacity, scale: artworkScale }}>
           <GameArtwork title={game.title} start={game.accentStart} end={game.accentEnd} variant="hero" imageUrl={heroUrl} className="size-full" />
         </motion.div>
@@ -133,10 +180,10 @@ export function GameDetailPage() {
             <AlertDescription>{clipError}</AlertDescription>
           </Alert>
         ) : null}
-        {clips.length ? (
+        {currentClips.length ? (
           <VideoPlayer
             game={game}
-            clips={clips}
+            clips={currentClips}
             totalCount={game.clipCount}
             selected={selected}
             hasMore={Boolean(nextCursor)}

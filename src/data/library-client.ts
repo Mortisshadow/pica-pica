@@ -99,6 +99,10 @@ export const libraryClient = {
     return invoke<MpvSnapshot>("mpv_seek", { sessionId, seconds });
   },
 
+  async mpvPreviewSeek(sessionId: number, seconds: number): Promise<void> {
+    return invoke<void>("mpv_preview_seek", { sessionId, seconds });
+  },
+
   async mpvVolume(sessionId: number, volume: number): Promise<MpvSnapshot> {
     return invoke<MpvSnapshot>("mpv_set_volume", { sessionId, volume });
   },

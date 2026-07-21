@@ -1,5 +1,6 @@
 import { AlertTriangle, ArrowDownAZ, Film, RefreshCw, Search } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { FeaturedClip } from "@/components/library/FeaturedClip";
 import { GameCard } from "@/components/library/GameCard";
 import { PageContainer, PageHeading } from "@/components/layout/PageContainer";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -8,8 +9,10 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Spinner } from "@/components/ui/spinner";
+import { libraryClient } from "@/data/library-client";
 import { useLibrary } from "@/features/library/LibraryProvider";
 import { pluralizeClips } from "@/lib/utils";
+import type { Clip } from "@/types/library";
 
 type SortMode = "recent" | "title" | "clips";
 
@@ -17,6 +20,28 @@ export function LibraryPage() {
   const { library, scanning, rescan, error } = useLibrary();
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<SortMode>("recent");
+  const [featuredClip, setFeaturedClip] = useState<Clip | null>(null);
+
+  const featuredGame = useMemo(() => [...(library?.games ?? [])]
+    .filter((game) => game.clipCount > 0 && game.newestClipAt !== null)
+    .sort((a, b) => (b.newestClipAt ?? 0) - (a.newestClipAt ?? 0))[0] ?? null, [library]);
+  const featuredGameId = featuredGame?.id ?? null;
+  const featuredClipTimestamp = featuredGame?.newestClipAt ?? null;
+
+  useEffect(() => {
+    let active = true;
+    if (!featuredGameId) return () => { active = false; };
+
+    void libraryClient.gameClips(featuredGameId, null, 1)
+      .then((page) => {
+        if (active) setFeaturedClip(page.clips[0] ?? null);
+      })
+      .catch(() => {
+        if (active) setFeaturedClip(null);
+      });
+
+    return () => { active = false; };
+  }, [featuredGameId, featuredClipTimestamp, library?.lastScannedAt]);
 
   const games = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase();
@@ -72,8 +97,12 @@ export function LibraryPage() {
 
       {error ? <Alert variant="destructive" className="mt-6"><AlertTriangle className="mt-0.5 size-4" /><AlertTitle>Scan failed</AlertTitle><AlertDescription>{error}</AlertDescription></Alert> : null}
 
+      {!query.trim() && featuredGame && featuredClip?.gameId === featuredGame.id && featuredClip.createdAt === featuredGame.newestClipAt ? (
+        <FeaturedClip game={featuredGame} clip={featuredClip} />
+      ) : null}
+
       {games.length > 0 ? (
-        <section className="mt-9 grid grid-cols-2 gap-x-4 gap-y-8 sm:grid-cols-3 sm:gap-x-5 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6" aria-label="Games">
+        <section className="mt-9 grid grid-cols-2 gap-x-4 gap-y-8 sm:grid-cols-3 sm:gap-x-5 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 [@media(min-width:1900px)]:grid-cols-7 [@media(min-width:2250px)]:grid-cols-8 [@media(min-width:2600px)]:grid-cols-9 [@media(min-width:2950px)]:grid-cols-10" aria-label="Games">
           {games.map((game, index) => <GameCard key={game.id} game={game} index={index} />)}
         </section>
       ) : (
