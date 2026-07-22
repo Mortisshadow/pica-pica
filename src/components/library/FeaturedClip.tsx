@@ -19,7 +19,7 @@ export function FeaturedClip({ game, clip }: FeaturedClipProps) {
   const thumbnailUrl = libraryClient.assetUrl(clip.thumbnailPath);
 
   return (
-    <Card className="relative isolate mx-auto mt-8 max-w-[2400px] overflow-hidden border-white/10 bg-black shadow-[0_28px_90px_rgba(0,0,0,.38)]">
+    <Card className="relative isolate mx-auto mt-8 max-w-[2000px] overflow-hidden border-white/10 bg-black shadow-[0_28px_90px_rgba(0,0,0,.38)]">
       <GameArtwork
         title={game.title}
         start={game.accentStart}
@@ -31,7 +31,7 @@ export function FeaturedClip({ game, clip }: FeaturedClipProps) {
       <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(0,0,0,.94)_0%,rgba(0,0,0,.72)_47%,rgba(0,0,0,.38)_100%)]" />
       <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-transparent to-black/15" />
 
-      <div className="relative grid min-h-[20rem] items-center gap-8 p-5 sm:p-7 lg:min-h-[clamp(28rem,30vw,34rem)] lg:grid-cols-[minmax(18rem,1fr)_minmax(24rem,40rem)] lg:p-10 xl:gap-12 xl:p-12">
+      <div className="relative grid min-h-[20rem] items-center gap-8 p-5 sm:p-7 lg:min-h-[clamp(28rem,30vw,34rem)] lg:grid-cols-[minmax(18rem,1fr)_minmax(28rem,48rem)] lg:p-10 xl:gap-12 xl:p-12">
         <CardContent className="max-w-2xl p-0 sm:p-0">
           <Badge variant="secondary" className="border-white/15 bg-black/35 uppercase tracking-[.14em] text-white/80 backdrop-blur-md">
             Newest clip
@@ -56,7 +56,7 @@ export function FeaturedClip({ game, clip }: FeaturedClipProps) {
         <Link
           to={gamePath}
           aria-label={`Open the newest ${game.title} clip`}
-          className="group/preview relative mx-auto block aspect-video w-full max-w-[40rem] overflow-hidden rounded-2xl border border-white/15 bg-black shadow-[0_24px_80px_rgba(0,0,0,.55)] outline-none transition duration-500 hover:-translate-y-1 hover:border-white/30 focus-visible:ring-2 focus-visible:ring-white/80 focus-visible:ring-offset-4 focus-visible:ring-offset-black lg:mx-0 lg:justify-self-end"
+          className="group/preview relative mx-auto block aspect-video w-full max-w-[48rem] overflow-hidden rounded-2xl border border-white/15 bg-black shadow-[0_24px_80px_rgba(0,0,0,.55)] outline-none transition duration-500 hover:-translate-y-1 hover:border-white/30 focus-visible:ring-2 focus-visible:ring-white/80 focus-visible:ring-offset-4 focus-visible:ring-offset-black lg:mx-0 lg:justify-self-end"
         >
           {thumbnailUrl ? (
             <img

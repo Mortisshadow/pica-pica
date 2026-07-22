@@ -138,9 +138,10 @@ export function GameDetailPage() {
         <motion.div className="absolute inset-0" style={{ opacity: artworkOpacity, scale: artworkScale }}>
           <GameArtwork title={game.title} start={game.accentStart} end={game.accentEnd} variant="hero" imageUrl={heroUrl} className="size-full" />
         </motion.div>
-        <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(8,9,11,.94)_0%,rgba(8,9,11,.62)_42%,rgba(8,9,11,.12)_72%),linear-gradient(0deg,#08090b_0%,transparent_48%)]" />
+        <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(8,9,11,.94)_0%,rgba(8,9,11,.62)_42%,rgba(8,9,11,.12)_72%)]" />
         <div className="noise" />
-        <motion.div style={{ y: contentY }} className="relative mx-auto w-full max-w-[3200px] px-5 pb-20 pt-32 sm:px-8 lg:px-10 lg:pb-24">
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[1] h-[48%] bg-gradient-to-b from-transparent via-[#08090b]/80 to-[#08090b]" />
+        <motion.div style={{ y: contentY }} className="relative z-[2] mx-auto w-full max-w-[3200px] px-5 pb-20 pt-32 sm:px-8 lg:px-10 lg:pb-24">
           <Button asChild variant="secondary" size="sm" className="mb-10 bg-black/25 backdrop-blur-md">
             <Link to="/library"><ArrowLeft className="size-4" /> Library</Link>
           </Button>

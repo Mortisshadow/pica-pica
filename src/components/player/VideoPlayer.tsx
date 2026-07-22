@@ -162,9 +162,6 @@ function NativeMpvPlayer({ game, selected, active, previousClip, nextAvailable, 
   const error = current?.error ?? null;
   const fallbackUrl = libraryClient.assetUrl(selected?.compatible ? selected.path : null);
   const posterUrl = libraryClient.assetUrl(selected?.thumbnailPath ?? null);
-  const navigationInset = previousClip || nextAvailable ? 36 : 0;
-  const navigationVerticalInset = navigationInset * 9 / 16;
-
   useEffect(() => {
     let mounted = true;
     void libraryClient
@@ -297,13 +294,13 @@ function NativeMpvPlayer({ game, selected, active, previousClip, nextAvailable, 
         const visibleArea = Math.max(0, visibleRight - visibleLeft) * Math.max(0, visibleBottom - visibleTop);
         const visibleRatio = visibleArea / Math.max(1, rect.width * rect.height);
         void libraryClient.mpvViewport({
-          x: Math.round((rect.left + navigationInset) * scale),
-          y: Math.round((rect.top + navigationVerticalInset) * scale),
-          width: Math.round(Math.max(0, rect.width - navigationInset * 2) * scale),
-          height: Math.round(Math.max(0, rect.height - navigationVerticalInset * 2) * scale),
+          x: Math.round(rect.left * scale),
+          y: Math.round(rect.top * scale),
+          width: Math.round(Math.max(0, rect.width) * scale),
+          height: Math.round(Math.max(0, rect.height) * scale),
           visible: active && (fullscreen || visibleRatio >= 0.18),
-          cornerRadius: fullscreen || navigationInset ? 0 : Math.round(22 * scale),
-          clipTop: fullscreen ? 0 : Math.round(Math.max(0, 69 - rect.top - navigationVerticalInset) * scale),
+          cornerRadius: fullscreen ? 0 : Math.round(22 * scale),
+          clipTop: fullscreen ? 0 : Math.round(Math.max(0, 69 - rect.top) * scale),
         }).catch(() => undefined);
       });
     };
@@ -326,7 +323,7 @@ function NativeMpvPlayer({ game, selected, active, previousClip, nextAvailable, 
       window.visualViewport?.removeEventListener("scroll", update);
       void libraryClient.mpvViewport({ x: 0, y: 0, width: 0, height: 0, visible: false, cornerRadius: 0, clipTop: 0 }).catch(() => undefined);
     };
-  }, [active, availability?.available, current?.sessionId, fullscreen, navigationInset, navigationVerticalInset, onSurfaceHeight, playerReady]);
+  }, [active, availability?.available, current?.sessionId, fullscreen, onSurfaceHeight, playerReady]);
 
   const updateSnapshot = (operation: Promise<MpvSnapshot>) => {
     const sessionId = current?.sessionId;
@@ -583,32 +580,6 @@ function NativeMpvPlayer({ game, selected, active, previousClip, nextAvailable, 
         ) : !current?.snapshot ? (
           <div className="absolute inset-0 grid place-items-center"><div className="flex items-center gap-3 text-sm text-white/60"><Spinner /> Starting libmpv …</div></div>
         ) : null}
-        {navigationInset ? (
-          <>
-            <Button
-              size="icon"
-              variant="ghost"
-              aria-label="Previous clip"
-              title={previousClip ? `Previous: ${previousClip.fileName}` : "No previous clip"}
-              disabled={!previousClip}
-              onClick={onPrevious}
-              className="absolute left-0 top-1/2 z-[2] size-9 -translate-y-1/2 rounded-none border-y border-r border-white/10 bg-black/75 opacity-0 backdrop-blur-sm transition-opacity group-hover/player:opacity-100 focus-visible:opacity-100 disabled:opacity-20"
-            >
-              <ChevronLeft className="size-5" />
-            </Button>
-            <Button
-              size="icon"
-              variant="ghost"
-              aria-label="Next clip"
-              title={nextAvailable ? "Next clip" : "No next clip"}
-              disabled={!nextAvailable || navigationPending}
-              onClick={onNext}
-              className="absolute right-0 top-1/2 z-[2] size-9 -translate-y-1/2 rounded-none border-y border-l border-white/10 bg-black/75 opacity-0 backdrop-blur-sm transition-opacity group-hover/player:opacity-100 focus-visible:opacity-100 disabled:opacity-20"
-            >
-              {navigationPending ? <Spinner className="size-4" /> : <ChevronRight className="size-5" />}
-            </Button>
-          </>
-        ) : null}
       </div>
 
       {availability?.available ? (
@@ -632,11 +603,31 @@ function NativeMpvPlayer({ game, selected, active, previousClip, nextAvailable, 
               <div className="flex min-w-0 flex-wrap items-center gap-2 sm:flex-nowrap">
                 <Button
                   size="icon"
+                  variant="ghost"
+                  aria-label="Previous clip"
+                  title={previousClip ? `Previous: ${previousClip.fileName}` : "No previous clip"}
+                  disabled={!previousClip}
+                  onClick={onPrevious}
+                >
+                  <ChevronLeft className="size-4" />
+                </Button>
+                <Button
+                  size="icon"
                   variant="secondary"
                   aria-label={snapshot.paused ? "Play" : "Pause"}
                   onClick={() => updateSnapshot(libraryClient.mpvPaused(snapshot.sessionId, !snapshot.paused))}
                 >
                   {snapshot.paused ? <Play className="size-4" /> : <Pause className="size-4" />}
+                </Button>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  aria-label="Next clip"
+                  title={nextAvailable ? "Next clip" : "No next clip"}
+                  disabled={!nextAvailable || navigationPending}
+                  onClick={onNext}
+                >
+                  {navigationPending ? <Spinner className="size-4" /> : <ChevronRight className="size-4" />}
                 </Button>
                 <span className="w-28 shrink-0 text-center text-xs tabular-nums text-muted-foreground">
                   {formatDuration(activeSeekDraft ?? snapshot.positionSeconds)} / {formatDuration(snapshot.durationSeconds)}
