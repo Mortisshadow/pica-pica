@@ -1,10 +1,9 @@
-import { AlertCircle, ChevronDown, ChevronLeft, ChevronRight, Film, Headphones, LayoutGrid, Maximize2, Minimize2, MonitorPlay, Pause, Play, Volume2, VolumeX } from "lucide-react";
+import { AlertCircle, ChevronLeft, ChevronRight, Film, LayoutGrid, Maximize2, Minimize2, MonitorPlay, Pause, Play, Volume2, VolumeX } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ClipCard } from "@/components/library/ClipCard";
 import { GameArtwork } from "@/components/library/GameArtwork";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Slider } from "@/components/ui/slider";
 import { Spinner } from "@/components/ui/spinner";
 import { libraryClient } from "@/data/library-client";
@@ -13,6 +12,8 @@ import type { Clip, Game } from "@/types/library";
 import type { MpvAvailability, MpvSnapshot } from "@/types/player";
 
 let nextPlayerSession = 0;
+const FULLSCREEN_CONTROLS_HIDE_DELAY = 1_400;
+const FULLSCREEN_CONTROLS_FADE_DURATION = 220;
 
 type SeekDraft = {
   sessionId: number;
@@ -147,20 +148,15 @@ function NativeMpvPlayer({ game, selected, active, previousClip, nextAvailable, 
   const viewportUpdateRef = useRef<() => void>(() => undefined);
   const nextOperationIdRef = useRef(0);
   const latestSeekOperationRef = useRef(0);
-  const latestAudioOperationRef = useRef(0);
   const volumeRequestRef = useRef(0);
   const previewSeekTimerRef = useRef<number | null>(null);
   const seekSettleTimerRef = useRef<number | null>(null);
   const pendingPreviewSeekRef = useRef<{ sessionId: number; value: number; operationId: number } | null>(null);
   const pendingExactSeekRef = useRef<{ sessionId: number; value: number; operationId: number } | null>(null);
   const seekCommandInFlightRef = useRef(false);
-  const pendingAudioSelectionRef = useRef<{ sessionId: number; trackIds: number[]; position: number; operationId: number } | null>(null);
-  const audioSelectionDraftRef = useRef<{ sessionId: number; trackIds: number[]; operationId: number } | null>(null);
-  const audioCommandInFlightRef = useRef(false);
   const [availability, setAvailability] = useState<MpvAvailability | null>(null);
   const [playback, setPlayback] = useState<{ clipId: string; sessionId: number; snapshot: MpvSnapshot | null; error: string | null } | null>(null);
   const [fullscreen, setFullscreen] = useState(false);
-  const [audioMenuOpen, setAudioMenuOpen] = useState(false);
   const [controlsHeight, setControlsHeight] = useState(96);
   const [fullscreenControlsVisible, setFullscreenControlsVisible] = useState(true);
   const [fullscreenControlsReserved, setFullscreenControlsReserved] = useState(true);
@@ -168,7 +164,6 @@ function NativeMpvPlayer({ game, selected, active, previousClip, nextAvailable, 
   const fullscreenClipReleaseTimerRef = useRef<number | null>(null);
   const [seekDraft, setSeekDraft] = useState<SeekDraft | null>(null);
   const [volumeDraft, setVolumeDraft] = useState<{ sessionId: number; value: number } | null>(null);
-  const [audioSelectionDraft, setAudioSelectionDraft] = useState<{ sessionId: number; trackIds: number[]; operationId: number } | null>(null);
   const current = playback?.clipId === selected?.id ? playback : null;
   const snapshot = current?.snapshot ?? null;
   const playerReady = Boolean(snapshot);
@@ -178,7 +173,6 @@ function NativeMpvPlayer({ game, selected, active, previousClip, nextAvailable, 
   const gameHeroUrl = libraryClient.assetUrl(game.heroPath);
   const viewportConfigRef = useRef({
     active,
-    audioMenuOpen,
     controlsHeight,
     fullscreen,
     fullscreenControlsReserved,
@@ -201,19 +195,19 @@ function NativeMpvPlayer({ game, selected, active, previousClip, nextAvailable, 
     fullscreenClipReleaseTimerRef.current = window.setTimeout(() => {
       setFullscreenControlsReserved(false);
       fullscreenClipReleaseTimerRef.current = null;
-    }, 320);
+    }, FULLSCREEN_CONTROLS_FADE_DURATION);
   }, []);
 
   const scheduleFullscreenControlsHide = useCallback(() => {
     if (fullscreenControlsTimerRef.current !== null) window.clearTimeout(fullscreenControlsTimerRef.current);
     fullscreenControlsTimerRef.current = null;
-    if (!audioMenuOpen && !snapshot?.paused) {
+    if (!snapshot?.paused) {
       fullscreenControlsTimerRef.current = window.setTimeout(() => {
         hideFullscreenControls();
         fullscreenControlsTimerRef.current = null;
-      }, 2_200);
+      }, FULLSCREEN_CONTROLS_HIDE_DELAY);
     }
-  }, [audioMenuOpen, hideFullscreenControls, snapshot?.paused]);
+  }, [hideFullscreenControls, snapshot?.paused]);
 
   const resetFullscreenControls = useCallback(() => {
     clearFullscreenControlTimers();
@@ -277,10 +271,7 @@ function NativeMpvPlayer({ game, selected, active, previousClip, nextAvailable, 
     seekSettleTimerRef.current = null;
     pendingPreviewSeekRef.current = null;
     pendingExactSeekRef.current = null;
-    pendingAudioSelectionRef.current = null;
-    audioSelectionDraftRef.current = null;
     latestSeekOperationRef.current = 0;
-    latestAudioOperationRef.current = 0;
     let mounted = true;
     const sessionId = ++nextPlayerSession;
     void libraryClient
@@ -299,15 +290,13 @@ function NativeMpvPlayer({ game, selected, active, previousClip, nextAvailable, 
       seekSettleTimerRef.current = null;
       pendingPreviewSeekRef.current = null;
       pendingExactSeekRef.current = null;
-      pendingAudioSelectionRef.current = null;
-      audioSelectionDraftRef.current = null;
       void libraryClient.mpvStop(sessionId).catch(() => undefined);
     };
   }, [availability?.available, selected]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || audioMenuOpen) return;
+      if (event.defaultPrevented) return;
       if (event.key === "Tab" && fullscreen && !fullscreenControlsVisible) {
         event.preventDefault();
         resetFullscreenControls();
@@ -330,7 +319,7 @@ function NativeMpvPlayer({ game, selected, active, previousClip, nextAvailable, 
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [audioMenuOpen, fullscreen, fullscreenControlsVisible, resetFullscreenControls]);
+  }, [fullscreen, fullscreenControlsVisible, resetFullscreenControls]);
 
   useEffect(() => () => {
     clearFullscreenControlTimers();
@@ -341,11 +330,11 @@ function NativeMpvPlayer({ game, selected, active, previousClip, nextAvailable, 
     if (fullscreenControlsTimerRef.current !== null) window.clearTimeout(fullscreenControlsTimerRef.current);
     fullscreenControlsTimerRef.current = null;
     const controlsAreActive = controlsRef.current?.matches(":hover, :focus-within") ?? false;
-    if (fullscreen && !audioMenuOpen && !snapshot?.paused && !controlsAreActive) {
+    if (fullscreen && !snapshot?.paused && !controlsAreActive) {
       fullscreenControlsTimerRef.current = window.setTimeout(() => {
         hideFullscreenControls();
         fullscreenControlsTimerRef.current = null;
-      }, 2_200);
+      }, FULLSCREEN_CONTROLS_HIDE_DELAY);
     }
     return () => {
       if (fullscreenControlsTimerRef.current !== null) {
@@ -353,7 +342,7 @@ function NativeMpvPlayer({ game, selected, active, previousClip, nextAvailable, 
         fullscreenControlsTimerRef.current = null;
       }
     };
-  }, [audioMenuOpen, fullscreen, hideFullscreenControls, snapshot?.paused]);
+  }, [fullscreen, hideFullscreenControls, snapshot?.paused]);
 
   useEffect(() => {
     if (!current?.sessionId || !playerReady) return;
@@ -387,13 +376,12 @@ function NativeMpvPlayer({ game, selected, active, previousClip, nextAvailable, 
   useEffect(() => {
     viewportConfigRef.current = {
       active,
-      audioMenuOpen,
       controlsHeight,
       fullscreen,
       fullscreenControlsReserved,
     };
     viewportUpdateRef.current();
-  }, [active, audioMenuOpen, controlsHeight, fullscreen, fullscreenControlsReserved]);
+  }, [active, controlsHeight, fullscreen, fullscreenControlsReserved]);
 
   useEffect(() => {
     const surface = surfaceRef.current;
@@ -415,7 +403,7 @@ function NativeMpvPlayer({ game, selected, active, previousClip, nextAvailable, 
         const visibleArea = Math.max(0, visibleRight - visibleLeft) * Math.max(0, visibleBottom - visibleTop);
         const visibleRatio = visibleArea / Math.max(1, rect.width * rect.height);
         const fullscreenClipBottom = config.fullscreenControlsReserved
-          ? Math.round((config.controlsHeight + (config.audioMenuOpen ? 320 : 0)) * scale)
+          ? Math.round(config.controlsHeight * scale)
           : Math.max(1, Math.round(2 * scale));
         void libraryClient.mpvViewport({
           x: Math.round(rect.left * scale),
@@ -469,19 +457,8 @@ function NativeMpvPlayer({ game, selected, active, previousClip, nextAvailable, 
       });
   };
 
-  const snapshotAudioIds = snapshot?.audioTracks.filter((track) => track.selected).map((track) => track.id) ?? [];
-  const selectedAudioIds = audioSelectionDraft && audioSelectionDraft.sessionId === snapshot?.sessionId
-    ? audioSelectionDraft.trackIds
-    : snapshotAudioIds;
   const activeSeekDraft = seekDraft && seekDraft.sessionId === snapshot?.sessionId ? seekDraft.value : null;
   const activeVolumeDraft = volumeDraft && volumeDraft.sessionId === snapshot?.sessionId ? volumeDraft.value : null;
-  const selectedAudioLabel = snapshot?.audioTracks.length
-    ? selectedAudioIds.length === 1
-      ? snapshot.audioTracks.find((track) => track.id === selectedAudioIds[0])?.title
-        ?? snapshot.audioTracks.find((track) => track.id === selectedAudioIds[0])?.language
-        ?? "1 track"
-      : `${selectedAudioIds.length} tracks`
-    : "Audio";
 
   const holdSeekPosition = (sessionId: number, value: number, phase: SeekDraft["phase"], operationId: number) => {
     setSeekDraft({ sessionId, value, phase, operationId });
@@ -619,61 +596,6 @@ function NativeMpvPlayer({ game, selected, active, previousClip, nextAvailable, 
       });
   };
 
-  const drainAudioSelection = () => {
-    if (audioCommandInFlightRef.current) return;
-    const pending = pendingAudioSelectionRef.current;
-    if (!pending) return;
-    pendingAudioSelectionRef.current = null;
-    audioCommandInFlightRef.current = true;
-    snapshotEpochRef.current += 1;
-    void libraryClient
-      .mpvAudioTracks(pending.sessionId, pending.trackIds)
-      .then((result) => {
-        snapshotEpochRef.current += 1;
-        if (result.sessionId !== pending.sessionId || latestAudioOperationRef.current !== pending.operationId) return;
-        setPlayback((currentPlayback) => {
-          if (currentPlayback?.sessionId !== pending.sessionId || !currentPlayback.snapshot) return currentPlayback;
-          return { ...currentPlayback, snapshot: { ...currentPlayback.snapshot, audioTracks: result.audioTracks }, error: null };
-        });
-        markSeekSettling(pending.sessionId, pending.operationId);
-      })
-      .catch((cause) => {
-        snapshotEpochRef.current += 1;
-        if (latestAudioOperationRef.current !== pending.operationId) return;
-        reportPlayerError(pending.sessionId, cause);
-        setSeekDraft((draft) => draft?.sessionId === pending.sessionId && draft.operationId === pending.operationId ? null : draft);
-      })
-      .finally(() => {
-        audioCommandInFlightRef.current = false;
-        if (pendingAudioSelectionRef.current) {
-          drainAudioSelection();
-        } else {
-          if (audioSelectionDraftRef.current?.operationId === pending.operationId) audioSelectionDraftRef.current = null;
-          setAudioSelectionDraft((draft) => draft?.operationId === pending.operationId ? null : draft);
-        }
-      });
-  };
-
-  const toggleAudioTrack = (trackId: number, selected: boolean) => {
-    if (!snapshot) return;
-    const currentIds = audioSelectionDraftRef.current?.sessionId === snapshot.sessionId
-      ? audioSelectionDraftRef.current.trackIds
-      : selectedAudioIds;
-    const nextIds = selected
-      ? [...new Set([...currentIds, trackId])]
-      : currentIds.filter((id) => id !== trackId);
-    if (!nextIds.length) return;
-    const position = activeSeekDraft ?? snapshot.positionSeconds;
-    const operationId = ++nextOperationIdRef.current;
-    latestAudioOperationRef.current = operationId;
-    audioSelectionDraftRef.current = { sessionId: snapshot.sessionId, trackIds: nextIds, operationId };
-    setAudioSelectionDraft({ sessionId: snapshot.sessionId, trackIds: nextIds, operationId });
-    pendingAudioSelectionRef.current = { sessionId: snapshot.sessionId, trackIds: nextIds, position, operationId };
-    snapshotEpochRef.current += 1;
-    holdSeekPosition(snapshot.sessionId, position, "queued", operationId);
-    drainAudioSelection();
-  };
-
   const toggleFullscreen = () => {
     const next = !fullscreen;
     void libraryClient
@@ -729,7 +651,7 @@ function NativeMpvPlayer({ game, selected, active, previousClip, nextAvailable, 
           inert={fullscreen && !fullscreenControlsVisible}
           className={cn(
             "mt-3 flex min-h-24 flex-col gap-3 rounded-2xl border border-white/[.08] bg-white/[.025] p-3",
-            fullscreen && "fixed inset-x-0 bottom-0 z-[101] m-0 rounded-none border-0 bg-gradient-to-t from-black via-black/95 to-black/45 px-5 pb-5 pt-9 transition duration-300",
+            fullscreen && "fixed inset-x-0 bottom-0 z-[101] m-0 rounded-none border-0 bg-gradient-to-t from-black via-black/95 to-black/45 px-5 pb-5 pt-9 transition duration-200",
             fullscreen && !fullscreenControlsVisible && "pointer-events-none translate-y-3 opacity-0",
           )}
         >
@@ -797,51 +719,6 @@ function NativeMpvPlayer({ game, selected, active, previousClip, nextAvailable, 
                   onValueCommit={([value]) => commitVolume(value)}
                   className="w-24 shrink-0"
                 />
-                {snapshot.audioTracks.length > 1 ? (
-                  <DropdownMenu
-                    open={audioMenuOpen}
-                    onOpenChange={(open) => {
-                      setAudioMenuOpen(open);
-                      if (open) holdFullscreenControls();
-                      else revealFullscreenControls();
-                    }}
-                    modal={false}
-                  >
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="sm" className="max-w-52 min-w-0" aria-label="Choose included audio tracks">
-                        <Headphones className="size-4 shrink-0" />
-                        <span className="truncate">{selectedAudioLabel}</span>
-                        <ChevronDown className="size-3.5 shrink-0 opacity-60" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent
-                      align="end"
-                      side={fullscreen ? "top" : "bottom"}
-                      sideOffset={10}
-                      collisionPadding={12}
-                      avoidCollisions={fullscreen}
-                      className="max-h-72 w-72 overflow-y-auto"
-                    >
-                      <DropdownMenuLabel>Included audio tracks</DropdownMenuLabel>
-                      <DropdownMenuSeparator />
-                      {snapshot.audioTracks.map((track, index) => {
-                        const trackIncluded = selectedAudioIds.includes(track.id);
-                        return (
-                          <DropdownMenuCheckboxItem
-                            key={track.id}
-                            checked={trackIncluded}
-                            disabled={trackIncluded && selectedAudioIds.length === 1}
-                            onCheckedChange={(checked) => toggleAudioTrack(track.id, checked === true)}
-                            onSelect={(event) => event.preventDefault()}
-                          >
-                            <span className="min-w-0 flex-1 truncate">{track.title ?? track.language ?? `Audio ${index + 1}`}</span>
-                            {track.codec ? <span className="shrink-0 text-[10px] uppercase text-muted-foreground">{track.codec}</span> : null}
-                          </DropdownMenuCheckboxItem>
-                        );
-                      })}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                ) : null}
                 <Button size="icon" variant="ghost" aria-label={fullscreen ? "Exit fullscreen" : "Enter fullscreen"} title={fullscreen ? "Exit fullscreen (Esc)" : "Fullscreen (F)"} onClick={toggleFullscreen}>
                   {fullscreen ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
                 </Button>

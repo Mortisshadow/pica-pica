@@ -31,17 +31,6 @@ pub struct MpvViewport {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct MpvAudioTrack {
-    pub id: i64,
-    pub title: Option<String>,
-    pub language: Option<String>,
-    pub codec: Option<String>,
-    pub channels: Option<String>,
-    pub selected: bool,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct MpvSnapshot {
     pub session_id: u64,
     pub status: String,
@@ -51,7 +40,6 @@ pub struct MpvSnapshot {
     pub seeking: bool,
     pub volume: f64,
     pub muted: bool,
-    pub audio_tracks: Vec<MpvAudioTrack>,
     pub error: Option<String>,
 }
 
@@ -120,14 +108,6 @@ impl MpvService {
     }
 
     pub fn set_muted(&self, _session_id: u64, _muted: bool) -> AppResult<MpvSnapshot> {
-        self.snapshot()
-    }
-
-    pub fn select_audio_tracks(
-        &self,
-        _session_id: u64,
-        _track_ids: Vec<i64>,
-    ) -> AppResult<MpvSnapshot> {
         self.snapshot()
     }
 

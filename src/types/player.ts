@@ -15,15 +15,6 @@ export interface MpvViewport {
   clipBottom: number;
 }
 
-export interface MpvAudioTrack {
-  id: number;
-  title: string | null;
-  language: string | null;
-  codec: string | null;
-  channels: string | null;
-  selected: boolean;
-}
-
 export interface MpvSnapshot {
   sessionId: number;
   status: "idle" | "loading" | "playing" | "paused" | "ended" | "error";
@@ -33,6 +24,5 @@ export interface MpvSnapshot {
   seeking: boolean;
   volume: number;
   muted: boolean;
-  audioTracks: MpvAudioTrack[];
   error: string | null;
 }

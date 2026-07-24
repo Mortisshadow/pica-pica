@@ -154,10 +154,12 @@ export function GameDetailPage() {
         <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(8,9,11,.94)_0%,rgba(8,9,11,.62)_42%,rgba(8,9,11,.12)_72%)]" />
         <div className="noise" />
         <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[1] h-[58%] bg-gradient-to-b from-transparent via-[#08090b]/75 to-[#08090b]" />
-        <motion.div style={{ y: contentY }} className="relative z-[2] mx-auto w-full max-w-[3200px] px-5 pb-20 pt-32 sm:px-8 lg:px-10 lg:pb-24">
-          <Button asChild variant="secondary" size="sm" className="mb-10 bg-black/25 backdrop-blur-md">
+        <div className="absolute inset-x-0 top-[69px] z-[3] mx-auto w-full max-w-[3200px] px-5 pt-8 sm:px-8 lg:px-10">
+          <Button asChild variant="secondary" size="sm" className="border-white/10 bg-background/90 shadow-lg backdrop-blur-md hover:bg-background">
             <Link to="/library"><ArrowLeft className="size-4" /> Library</Link>
           </Button>
+        </div>
+        <motion.div style={{ y: contentY }} className="relative z-[2] mx-auto w-full max-w-[3200px] px-5 pb-20 pt-32 sm:px-8 lg:px-10 lg:pb-24">
           <motion.div initial={{ opacity: 0, y: 25 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }} className="max-w-3xl">
             <div className="flex flex-wrap items-center gap-2">
               {game.metadataStatus === "unresolved" ? (

@@ -111,10 +111,6 @@ export const libraryClient = {
     return invoke<MpvSnapshot>("mpv_set_muted", { sessionId, muted });
   },
 
-  async mpvAudioTracks(sessionId: number, trackIds: number[]): Promise<MpvSnapshot> {
-    return invoke<MpvSnapshot>("mpv_select_audio_tracks", { sessionId, trackIds });
-  },
-
   async mpvStop(sessionId: number): Promise<void> {
     if (!isTauri()) return;
     return invoke<void>("mpv_stop", { sessionId });
