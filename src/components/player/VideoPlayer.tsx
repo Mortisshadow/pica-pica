@@ -1,5 +1,5 @@
 import { AlertCircle, ChevronDown, ChevronLeft, ChevronRight, Film, Headphones, LayoutGrid, Maximize2, Minimize2, MonitorPlay, Pause, Play, Volume2, VolumeX } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ClipCard } from "@/components/library/ClipCard";
 import { GameArtwork } from "@/components/library/GameArtwork";
 import { Badge } from "@/components/ui/badge";
@@ -34,7 +34,8 @@ interface VideoPlayerProps {
 }
 
 export function VideoPlayer({ game, clips, totalCount, selected, hasMore, loadingMore, playerActive = true, onLoadMore, onSelect }: VideoPlayerProps) {
-  const otherClips = clips.slice(0, 12);
+  const recentClips = clips.slice(0, 12);
+  const showQueue = totalCount > 1;
   const [playerSurfaceHeight, setPlayerSurfaceHeight] = useState<number | null>(null);
   const selectedIndex = selected ? clips.findIndex((clip) => clip.id === selected.id) : -1;
   const previousClip = selectedIndex > 0 ? clips[selectedIndex - 1] : null;
@@ -50,9 +51,16 @@ export function VideoPlayer({ game, clips, totalCount, selected, hasMore, loadin
     if (loaded[0]) onSelect(loaded[0]);
   };
 
+  const selectFromGrid = (clip: Clip) => {
+    onSelect(clip);
+    window.requestAnimationFrame(() => {
+      document.getElementById("clip-player")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  };
+
   return (
     <div>
-    <div className={`mx-auto grid w-full max-w-[min(100%,calc(177.78vh+102px))] items-start gap-5 ${otherClips.length ? "xl:grid-cols-[minmax(0,1fr)_clamp(340px,20vw,480px)]" : ""}`}>
+    <div id="clip-player" className={`mx-auto grid w-full scroll-mt-24 max-w-[min(100%,calc(177.78vh+102px))] items-start gap-5 ${showQueue ? "xl:grid-cols-[minmax(0,1fr)_clamp(340px,20vw,480px)]" : ""}`}>
       <div className="min-w-0">
         <NativeMpvPlayer
           game={game}
@@ -81,20 +89,20 @@ export function VideoPlayer({ game, clips, totalCount, selected, hasMore, loadin
         ) : null}
       </div>
 
-      {otherClips.length ? <aside data-clip-queue style={{ height: playerSurfaceHeight ?? undefined }} className="hidden min-w-0 flex-col overflow-hidden rounded-[1.35rem] border border-white/[.08] bg-white/[.025] p-3 xl:flex">
+      {showQueue ? <aside data-clip-queue style={{ height: playerSurfaceHeight ?? undefined }} className="hidden min-w-0 flex-col overflow-hidden rounded-[1.35rem] border border-white/[.08] bg-white/[.025] p-3 xl:flex">
         <div className="flex shrink-0 items-center justify-between px-2 pb-3 pt-1">
-          <div className="flex items-center gap-2 text-sm font-semibold"><Film className="size-4 text-primary" /> More clips</div>
+          <div className="flex items-center gap-2 text-sm font-semibold"><Film className="size-4 text-primary" /> Recent clips</div>
           <span className="text-xs text-muted-foreground">{Math.min(totalCount, 12)} of {totalCount}</span>
         </div>
         <div className="grid min-h-0 gap-2 sm:grid-cols-2 xl:auto-rows-max xl:flex-1 xl:content-start xl:grid-cols-1 xl:overflow-y-auto xl:overscroll-contain xl:pr-1">
-          {otherClips.map((clip) => (
+          {recentClips.map((clip) => (
             <ClipCard key={clip.id} clip={clip} game={game} active={clip.id === selected?.id} onSelect={() => onSelect(clip)} />
           ))}
         </div>
       </aside> : null}
     </div>
 
-    <section className="mt-12 border-t border-white/[.07] pt-9" aria-labelledby="all-clips-title">
+    <section id="all-clips" className="mt-12 scroll-mt-24 border-t border-white/[.07] pt-9" aria-labelledby="all-clips-title">
       <div className="mb-6 flex items-end justify-between gap-4">
         <div>
           <p className="text-xs font-bold uppercase tracking-[.18em] text-primary">Your collection</p>
@@ -104,7 +112,7 @@ export function VideoPlayer({ game, clips, totalCount, selected, hasMore, loadin
       </div>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 [@media(min-width:2200px)]:grid-cols-5 [@media(min-width:3000px)]:grid-cols-6">
         {clips.map((clip) => (
-          <ClipCard key={clip.id} clip={clip} game={game} active={clip.id === selected?.id} onSelect={() => onSelect(clip)} />
+          <ClipCard key={clip.id} clip={clip} game={game} active={clip.id === selected?.id} onSelect={() => selectFromGrid(clip)} />
         ))}
       </div>
       {hasMore ? (
@@ -136,6 +144,7 @@ function NativeMpvPlayer({ game, selected, active, previousClip, nextAvailable, 
   const surfaceRef = useRef<HTMLDivElement>(null);
   const controlsRef = useRef<HTMLDivElement>(null);
   const snapshotEpochRef = useRef(0);
+  const viewportUpdateRef = useRef<() => void>(() => undefined);
   const nextOperationIdRef = useRef(0);
   const latestSeekOperationRef = useRef(0);
   const latestAudioOperationRef = useRef(0);
@@ -153,6 +162,10 @@ function NativeMpvPlayer({ game, selected, active, previousClip, nextAvailable, 
   const [fullscreen, setFullscreen] = useState(false);
   const [audioMenuOpen, setAudioMenuOpen] = useState(false);
   const [controlsHeight, setControlsHeight] = useState(96);
+  const [fullscreenControlsVisible, setFullscreenControlsVisible] = useState(true);
+  const [fullscreenControlsReserved, setFullscreenControlsReserved] = useState(true);
+  const fullscreenControlsTimerRef = useRef<number | null>(null);
+  const fullscreenClipReleaseTimerRef = useRef<number | null>(null);
   const [seekDraft, setSeekDraft] = useState<SeekDraft | null>(null);
   const [volumeDraft, setVolumeDraft] = useState<{ sessionId: number; value: number } | null>(null);
   const [audioSelectionDraft, setAudioSelectionDraft] = useState<{ sessionId: number; trackIds: number[]; operationId: number } | null>(null);
@@ -162,6 +175,69 @@ function NativeMpvPlayer({ game, selected, active, previousClip, nextAvailable, 
   const error = current?.error ?? null;
   const fallbackUrl = libraryClient.assetUrl(selected?.compatible ? selected.path : null);
   const posterUrl = libraryClient.assetUrl(selected?.thumbnailPath ?? null);
+  const gameHeroUrl = libraryClient.assetUrl(game.heroPath);
+  const viewportConfigRef = useRef({
+    active,
+    audioMenuOpen,
+    controlsHeight,
+    fullscreen,
+    fullscreenControlsReserved,
+  });
+
+  const clearFullscreenControlTimers = useCallback(() => {
+    if (fullscreenControlsTimerRef.current !== null) {
+      window.clearTimeout(fullscreenControlsTimerRef.current);
+      fullscreenControlsTimerRef.current = null;
+    }
+    if (fullscreenClipReleaseTimerRef.current !== null) {
+      window.clearTimeout(fullscreenClipReleaseTimerRef.current);
+      fullscreenClipReleaseTimerRef.current = null;
+    }
+  }, []);
+
+  const hideFullscreenControls = useCallback(() => {
+    setFullscreenControlsVisible(false);
+    if (fullscreenClipReleaseTimerRef.current !== null) window.clearTimeout(fullscreenClipReleaseTimerRef.current);
+    fullscreenClipReleaseTimerRef.current = window.setTimeout(() => {
+      setFullscreenControlsReserved(false);
+      fullscreenClipReleaseTimerRef.current = null;
+    }, 320);
+  }, []);
+
+  const scheduleFullscreenControlsHide = useCallback(() => {
+    if (fullscreenControlsTimerRef.current !== null) window.clearTimeout(fullscreenControlsTimerRef.current);
+    fullscreenControlsTimerRef.current = null;
+    if (!audioMenuOpen && !snapshot?.paused) {
+      fullscreenControlsTimerRef.current = window.setTimeout(() => {
+        hideFullscreenControls();
+        fullscreenControlsTimerRef.current = null;
+      }, 2_200);
+    }
+  }, [audioMenuOpen, hideFullscreenControls, snapshot?.paused]);
+
+  const resetFullscreenControls = useCallback(() => {
+    clearFullscreenControlTimers();
+    setFullscreenControlsReserved(true);
+    setFullscreenControlsVisible(true);
+  }, [clearFullscreenControlTimers]);
+
+  const revealFullscreenControls = useCallback(() => {
+    if (!fullscreen) return;
+    if (fullscreenClipReleaseTimerRef.current !== null) {
+      window.clearTimeout(fullscreenClipReleaseTimerRef.current);
+      fullscreenClipReleaseTimerRef.current = null;
+    }
+    setFullscreenControlsReserved(true);
+    setFullscreenControlsVisible(true);
+    scheduleFullscreenControlsHide();
+  }, [fullscreen, scheduleFullscreenControlsHide]);
+
+  const holdFullscreenControls = useCallback(() => {
+    if (!fullscreen) return;
+    clearFullscreenControlTimers();
+    setFullscreenControlsReserved(true);
+    setFullscreenControlsVisible(true);
+  }, [clearFullscreenControlTimers, fullscreen]);
   useEffect(() => {
     let mounted = true;
     void libraryClient
@@ -171,7 +247,7 @@ function NativeMpvPlayer({ game, selected, active, previousClip, nextAvailable, 
     return () => { mounted = false; };
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const surface = surfaceRef.current;
     if (!surface) return;
     const reportHeight = () => onSurfaceHeight(surface.getBoundingClientRect().height);
@@ -232,22 +308,52 @@ function NativeMpvPlayer({ game, selected, active, previousClip, nextAvailable, 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.defaultPrevented || audioMenuOpen) return;
+      if (event.key === "Tab" && fullscreen && !fullscreenControlsVisible) {
+        event.preventDefault();
+        resetFullscreenControls();
+        return;
+      }
       if (event.key === "Escape" && fullscreen) {
-        void libraryClient.setFullscreen(false).then(() => setFullscreen(false));
+        void libraryClient.setFullscreen(false).then(() => {
+          setFullscreen(false);
+          resetFullscreenControls();
+        });
       } else if (event.key.toLocaleLowerCase() === "f" && !event.ctrlKey && !event.metaKey && !event.altKey) {
         const target = event.target as HTMLElement | null;
         if (target?.matches("input, textarea, select, [contenteditable='true']")) return;
         const next = !fullscreen;
-        void libraryClient.setFullscreen(next).then(() => setFullscreen(next));
+        void libraryClient.setFullscreen(next).then(() => {
+          setFullscreen(next);
+          resetFullscreenControls();
+        });
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [audioMenuOpen, fullscreen]);
+  }, [audioMenuOpen, fullscreen, fullscreenControlsVisible, resetFullscreenControls]);
 
   useEffect(() => () => {
+    clearFullscreenControlTimers();
     if (fullscreen) void libraryClient.setFullscreen(false);
-  }, [fullscreen]);
+  }, [clearFullscreenControlTimers, fullscreen]);
+
+  useEffect(() => {
+    if (fullscreenControlsTimerRef.current !== null) window.clearTimeout(fullscreenControlsTimerRef.current);
+    fullscreenControlsTimerRef.current = null;
+    const controlsAreActive = controlsRef.current?.matches(":hover, :focus-within") ?? false;
+    if (fullscreen && !audioMenuOpen && !snapshot?.paused && !controlsAreActive) {
+      fullscreenControlsTimerRef.current = window.setTimeout(() => {
+        hideFullscreenControls();
+        fullscreenControlsTimerRef.current = null;
+      }, 2_200);
+    }
+    return () => {
+      if (fullscreenControlsTimerRef.current !== null) {
+        window.clearTimeout(fullscreenControlsTimerRef.current);
+        fullscreenControlsTimerRef.current = null;
+      }
+    };
+  }, [audioMenuOpen, fullscreen, hideFullscreenControls, snapshot?.paused]);
 
   useEffect(() => {
     if (!current?.sessionId || !playerReady) return;
@@ -279,31 +385,51 @@ function NativeMpvPlayer({ game, selected, active, previousClip, nextAvailable, 
   }, [current?.sessionId, playerReady]);
 
   useEffect(() => {
+    viewportConfigRef.current = {
+      active,
+      audioMenuOpen,
+      controlsHeight,
+      fullscreen,
+      fullscreenControlsReserved,
+    };
+    viewportUpdateRef.current();
+  }, [active, audioMenuOpen, controlsHeight, fullscreen, fullscreenControlsReserved]);
+
+  useEffect(() => {
     const surface = surfaceRef.current;
-    if (!surface || !availability?.available || !current?.sessionId || !playerReady) return;
+    if (!surface || !availability?.available || !current?.sessionId || !playerReady) {
+      void libraryClient.mpvViewport({ x: 0, y: 0, width: 0, height: 0, visible: false, cornerRadius: 0, clipTop: 0, clipBottom: 0 }).catch(() => undefined);
+      return;
+    }
     let frame = 0;
     const update = () => {
       window.cancelAnimationFrame(frame);
       frame = window.requestAnimationFrame(() => {
+        const config = viewportConfigRef.current;
         const rect = surface.getBoundingClientRect();
         const scale = window.devicePixelRatio || 1;
         const visibleLeft = Math.max(rect.left, 0);
-        const visibleTop = Math.max(rect.top, fullscreen ? 0 : 69);
+        const visibleTop = Math.max(rect.top, config.fullscreen ? 0 : 69);
         const visibleRight = Math.min(rect.right, window.innerWidth);
         const visibleBottom = Math.min(rect.bottom, window.innerHeight);
         const visibleArea = Math.max(0, visibleRight - visibleLeft) * Math.max(0, visibleBottom - visibleTop);
         const visibleRatio = visibleArea / Math.max(1, rect.width * rect.height);
+        const fullscreenClipBottom = config.fullscreenControlsReserved
+          ? Math.round((config.controlsHeight + (config.audioMenuOpen ? 320 : 0)) * scale)
+          : Math.max(1, Math.round(2 * scale));
         void libraryClient.mpvViewport({
           x: Math.round(rect.left * scale),
           y: Math.round(rect.top * scale),
           width: Math.round(Math.max(0, rect.width) * scale),
           height: Math.round(Math.max(0, rect.height) * scale),
-          visible: active && (fullscreen || visibleRatio >= 0.18),
-          cornerRadius: fullscreen ? 0 : Math.round(22 * scale),
-          clipTop: fullscreen ? 0 : Math.round(Math.max(0, 69 - rect.top) * scale),
+          visible: config.active && (config.fullscreen || visibleRatio >= 0.18),
+          cornerRadius: config.fullscreen ? 0 : Math.round(22 * scale),
+          clipTop: config.fullscreen ? 0 : Math.round(Math.max(0, 69 - rect.top) * scale),
+          clipBottom: config.fullscreen ? fullscreenClipBottom : 0,
         }).catch(() => undefined);
       });
     };
+    viewportUpdateRef.current = update;
     const resizeObserver = new ResizeObserver(update);
     const intersectionObserver = new IntersectionObserver(update, { threshold: [0, 1] });
     resizeObserver.observe(surface);
@@ -314,6 +440,7 @@ function NativeMpvPlayer({ game, selected, active, previousClip, nextAvailable, 
     window.visualViewport?.addEventListener("scroll", update);
     update();
     return () => {
+      viewportUpdateRef.current = () => undefined;
       window.cancelAnimationFrame(frame);
       resizeObserver.disconnect();
       intersectionObserver.disconnect();
@@ -321,9 +448,9 @@ function NativeMpvPlayer({ game, selected, active, previousClip, nextAvailable, 
       window.removeEventListener("resize", update);
       window.visualViewport?.removeEventListener("resize", update);
       window.visualViewport?.removeEventListener("scroll", update);
-      void libraryClient.mpvViewport({ x: 0, y: 0, width: 0, height: 0, visible: false, cornerRadius: 0, clipTop: 0 }).catch(() => undefined);
+      void libraryClient.mpvViewport({ x: 0, y: 0, width: 0, height: 0, visible: false, cornerRadius: 0, clipTop: 0, clipBottom: 0 }).catch(() => undefined);
     };
-  }, [active, availability?.available, current?.sessionId, fullscreen, onSurfaceHeight, playerReady]);
+  }, [availability?.available, current?.sessionId, playerReady]);
 
   const updateSnapshot = (operation: Promise<MpvSnapshot>) => {
     const sessionId = current?.sessionId;
@@ -551,29 +678,37 @@ function NativeMpvPlayer({ game, selected, active, previousClip, nextAvailable, 
     const next = !fullscreen;
     void libraryClient
       .setFullscreen(next)
-      .then(() => setFullscreen(next))
+      .then(() => {
+        setFullscreen(next);
+        resetFullscreenControls();
+      })
       .catch(() => undefined);
   };
 
   return (
     <div>
-      <div ref={surfaceRef} data-player-surface className={cn(
+      <div ref={surfaceRef} data-player-surface onPointerMove={revealFullscreenControls} className={cn(
         "group/player relative aspect-video overflow-hidden rounded-[1.35rem] border border-white/10 bg-[#050506] shadow-[0_24px_80px_rgba(0,0,0,.35)]",
-        fullscreen && "fixed left-0 right-0 top-0 z-[100] aspect-auto rounded-none border-0 shadow-none",
-      )} style={fullscreen ? { bottom: controlsHeight + (audioMenuOpen ? 320 : 0) } : undefined}>
+        fullscreen && "fixed inset-0 z-[100] aspect-auto rounded-none border-0 shadow-none",
+      )}>
         {!availability ? (
           <div className="absolute inset-0 grid place-items-center"><Spinner className="size-6" /></div>
         ) : !availability.available && fallbackUrl ? (
           <ManagedVideo key={fallbackUrl} src={fallbackUrl} poster={posterUrl} />
         ) : !availability.available || error || !selected ? (
           <>
-            <GameArtwork title={game.title} start={game.accentStart} end={game.accentEnd} variant="hero" className="absolute inset-0 size-full opacity-45" />
+            <GameArtwork title={game.title} start={game.accentStart} end={game.accentEnd} variant="hero" imageUrl={gameHeroUrl} className="absolute inset-0 size-full opacity-45" />
             <div className="absolute inset-0 bg-black/60" />
             <div className="absolute inset-0 grid place-items-center px-8 text-center">
               <div className="max-w-lg">
                 {error || !availability.available ? <AlertCircle className="mx-auto size-8 text-amber-300" /> : <MonitorPlay className="mx-auto size-9 text-white/75" />}
                 <p className="mt-4 text-base font-semibold">{error ? "libmpv could not play this clip" : selected ? "Embedded libmpv is unavailable" : "Choose a local clip"}</p>
-                <p className="mt-2 text-xs leading-5 text-white/50">{error ?? availability.diagnostic ?? "The Windows preview includes libmpv for direct local playback."}</p>
+                <p className="mt-2 text-xs leading-5 text-white/50">
+                  {error
+                    ?? (!availability.available
+                      ? availability.diagnostic ?? "The Windows preview includes libmpv for direct local playback."
+                      : "Choose a clip from Recent clips or the grid below to start playback.")}
+                </p>
               </div>
             </div>
           </>
@@ -583,10 +718,21 @@ function NativeMpvPlayer({ game, selected, active, previousClip, nextAvailable, 
       </div>
 
       {availability?.available ? (
-        <div ref={controlsRef} className={cn(
-          "mt-3 flex min-h-24 flex-col gap-3 rounded-2xl border border-white/[.08] bg-white/[.025] p-3",
-          fullscreen && "fixed inset-x-0 bottom-0 z-[101] m-0 rounded-none border-x-0 border-b-0 bg-black px-5",
-        )}>
+        <div
+          ref={controlsRef}
+          onPointerEnter={holdFullscreenControls}
+          onPointerMove={holdFullscreenControls}
+          onPointerLeave={revealFullscreenControls}
+          onFocusCapture={holdFullscreenControls}
+          onBlurCapture={revealFullscreenControls}
+          aria-hidden={fullscreen && !fullscreenControlsVisible}
+          inert={fullscreen && !fullscreenControlsVisible}
+          className={cn(
+            "mt-3 flex min-h-24 flex-col gap-3 rounded-2xl border border-white/[.08] bg-white/[.025] p-3",
+            fullscreen && "fixed inset-x-0 bottom-0 z-[101] m-0 rounded-none border-0 bg-gradient-to-t from-black via-black/95 to-black/45 px-5 pb-5 pt-9 transition duration-300",
+            fullscreen && !fullscreenControlsVisible && "pointer-events-none translate-y-3 opacity-0",
+          )}
+        >
           {snapshot ? (
             <>
               <Slider
@@ -652,7 +798,15 @@ function NativeMpvPlayer({ game, selected, active, previousClip, nextAvailable, 
                   className="w-24 shrink-0"
                 />
                 {snapshot.audioTracks.length > 1 ? (
-                  <DropdownMenu open={audioMenuOpen} onOpenChange={setAudioMenuOpen} modal={false}>
+                  <DropdownMenu
+                    open={audioMenuOpen}
+                    onOpenChange={(open) => {
+                      setAudioMenuOpen(open);
+                      if (open) holdFullscreenControls();
+                      else revealFullscreenControls();
+                    }}
+                    modal={false}
+                  >
                     <DropdownMenuTrigger asChild>
                       <Button variant="ghost" size="sm" className="max-w-52 min-w-0" aria-label="Choose included audio tracks">
                         <Headphones className="size-4 shrink-0" />
@@ -695,6 +849,13 @@ function NativeMpvPlayer({ game, selected, active, previousClip, nextAvailable, 
             </>
           ) : <div className="flex w-full flex-1 items-center justify-center gap-2 text-xs text-muted-foreground"><Spinner /> Loading player …</div>}
         </div>
+      ) : null}
+      {fullscreen && !fullscreenControlsVisible ? (
+        <div
+          aria-hidden="true"
+          className="fixed inset-x-0 bottom-0 z-[102] h-0.5"
+          onPointerEnter={revealFullscreenControls}
+        />
       ) : null}
     </div>
   );

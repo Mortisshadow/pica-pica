@@ -26,6 +26,7 @@ pub struct MpvViewport {
     pub visible: bool,
     pub corner_radius: i32,
     pub clip_top: i32,
+    pub clip_bottom: i32,
 }
 
 #[derive(Debug, Clone, Serialize)]

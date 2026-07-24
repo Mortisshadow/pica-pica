@@ -7,11 +7,12 @@ use std::ptr;
 use std::sync::{Arc, Mutex};
 use tauri::WebviewWindow;
 use windows::Win32::Foundation::{HINSTANCE, HWND};
-use windows::Win32::Graphics::Gdi::{CreateRoundRectRgn, SetWindowRgn};
+use windows::Win32::Graphics::Gdi::{CreateRectRgn, CreateRoundRectRgn, SetWindowRgn};
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, HWND_TOP, SW_HIDE, SW_SHOW, SWP_NOACTIVATE, SWP_NOOWNERZORDER, SWP_SHOWWINDOW,
     SetWindowPos, ShowWindow, WINDOW_EX_STYLE, WS_CHILD, WS_CLIPCHILDREN, WS_CLIPSIBLINGS,
+    WS_DISABLED,
 };
 use windows::core::w;
 
@@ -50,7 +51,6 @@ struct MpvApi {
     mpv_free: MpvFree,
     terminate_destroy: TerminateDestroy,
 }
-
 unsafe impl Send for MpvApi {}
 
 impl MpvApi {
@@ -143,6 +143,8 @@ impl Player {
             ("keep-open", "yes".to_owned()),
             ("osc", "no".to_owned()),
             ("input-default-bindings", "no".to_owned()),
+            ("input-cursor", "yes".to_owned()),
+            ("input-cursor-passthrough", "yes".to_owned()),
             ("input-vo-keyboard", "no".to_owned()),
             ("terminal", "no".to_owned()),
         ] {
@@ -494,14 +496,21 @@ impl MpvService {
                 let _ = ShowWindow(player.host, SW_HIDE);
                 return Ok(());
             }
-            let region = CreateRoundRectRgn(
-                0,
-                viewport.clip_top.clamp(0, viewport.height),
-                viewport.width + 1,
-                viewport.height + 1,
-                viewport.corner_radius * 2,
-                viewport.corner_radius * 2,
-            );
+            let clip_top = viewport.clip_top.clamp(0, viewport.height);
+            let clip_bottom = viewport.clip_bottom.clamp(0, viewport.height - clip_top);
+            let region_bottom = (viewport.height - clip_bottom).max(clip_top);
+            let region = if viewport.corner_radius > 0 {
+                CreateRoundRectRgn(
+                    0,
+                    clip_top,
+                    viewport.width + 1,
+                    region_bottom + 1,
+                    viewport.corner_radius * 2,
+                    viewport.corner_radius * 2,
+                )
+            } else {
+                CreateRectRgn(0, clip_top, viewport.width + 1, region_bottom + 1)
+            };
             let _ = SetWindowRgn(player.host, Some(region), true);
             SetWindowPos(
                 player.host,
@@ -617,7 +626,7 @@ fn create_host(window: &WebviewWindow) -> Result<HWND, String> {
                     WINDOW_EX_STYLE::default(),
                     w!("STATIC"),
                     w!(""),
-                    WS_CHILD | WS_CLIPSIBLINGS | WS_CLIPCHILDREN,
+                    WS_CHILD | WS_DISABLED | WS_CLIPSIBLINGS | WS_CLIPCHILDREN,
                     0,
                     0,
                     1,
